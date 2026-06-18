@@ -498,6 +498,9 @@ export default function TodayTasks() {
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
   const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, copyTask } = useTasks(accessToken);
 
+  // true가 되는 시점이 containerRef가 실제 div에 연결되는 시점
+  const mainViewVisible = isSignedIn && !isSilentTrying && !loading;
+
   const pressTimerRef = useRef(null);
   const longPressFiredRef = useRef(false);
   const pressStartPosRef = useRef({ x: 0, y: 0 });
@@ -737,7 +740,7 @@ export default function TodayTasks() {
       el.removeEventListener('touchmove', onMove);
       el.removeEventListener('touchend', onEnd);
     };
-  }, []);
+  }, [mainViewVisible]); // [] 아님 — 첫 마운트 시 containerRef가 null이므로 메인 화면 표시 시점에 재실행
 
   const handleTextClick = (id) => {
     if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
