@@ -278,5 +278,54 @@ export function useTasks(accessToken) {
     }
   }, [accessToken, listId]);
 
-  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask };
+  const copyTask = useCallback(async (task, targetDueDate) => {
+    if (!listId) return;
+    const oid = newId();
+    setTasks((prev) => [...prev, {
+      id: oid, text: task.text, done: false,
+      dueDate: targetDueDate, date: null,
+      notes: task.notes || '',
+      expanded: false, subtasks: [],
+      _listId: listId, _parentId: null,
+    }]);
+    db.tasks.put({ id: oid, _listId: listId, _parentId: null, text: task.text, done: false, dueDate: targetDueDate, date: null, notes: task.notes || '' }).catch(() => {});
+
+    if (!navigator.onLine) {
+      db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text: task.text, dueDate: targetDueDate, notes: task.notes || '' }, createdAt: Date.now() }).catch(() => {});
+      for (const sub of task.subtasks) {
+        const subOid = newId();
+        setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: sub.text, done: false }] } : t));
+        db.tasks.put({ id: subOid, _listId: listId, _parentId: oid, text: sub.text, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
+        db.pendingOps.add({ type: 'addSubtask', payload: { tempId: subOid, taskId: oid, text: sub.text }, createdAt: Date.now() }).catch(() => {});
+      }
+      return;
+    }
+
+    try {
+      const g = await api.createTask(accessToken, listId, {
+        title: task.text, due: dueParam(targetDueDate), notes: task.notes || '', status: 'needsAction',
+      });
+      setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, id: g.id } : t));
+      db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text: task.text, done: false, dueDate: targetDueDate, date: null, notes: task.notes || '' })).catch(() => {});
+
+      for (const sub of task.subtasks) {
+        const subOid = newId();
+        setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: sub.text, done: false }] } : t));
+        db.tasks.put({ id: subOid, _listId: listId, _parentId: g.id, text: sub.text, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
+        try {
+          const sg = await api.createTask(accessToken, listId, { title: sub.text, parent: g.id, status: 'needsAction' });
+          setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: t.subtasks.map((s) => s.id === subOid ? { ...s, id: sg.id } : s) } : t));
+          db.tasks.delete(subOid).then(() => db.tasks.put({ id: sg.id, _listId: listId, _parentId: g.id, text: sub.text, done: false, dueDate: null, date: null, notes: '' })).catch(() => {});
+        } catch {
+          setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subOid) } : t));
+          db.tasks.delete(subOid).catch(() => {});
+        }
+      }
+    } catch {
+      setTasks((prev) => prev.filter((t) => t.id !== oid));
+      db.tasks.delete(oid).catch(() => {});
+    }
+  }, [accessToken, listId]);
+
+  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, copyTask };
 }

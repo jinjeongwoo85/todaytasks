@@ -464,15 +464,6 @@ function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onS
                 onNextMonth={() => setPickerMonth((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}
                 onToday={() => { setPickerMonth(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)); onChange({ [pickerField]: TODAY_ISO }); setPickerField(null); }}
               />
-              <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
-                <button
-                  onClick={() => { onChange({ [pickerField]: null }); setPickerField(null); }}
-                  className="mono"
-                  style={{ fontSize: '11px', color: '#B5562F', background: '#F3E0D8', border: 'none', cursor: 'pointer', padding: '5px 16px', borderRadius: '999px' }}
-                >
-                  날짜 없애기
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -505,7 +496,7 @@ export default function TodayTasks() {
   const [dragInfo, setDragInfo] = useState(null);
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
-  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask } = useTasks(accessToken);
+  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, copyTask } = useTasks(accessToken);
 
   const pressTimerRef = useRef(null);
   const longPressFiredRef = useRef(false);
@@ -739,7 +730,7 @@ export default function TodayTasks() {
   const copySelectedTo = (targetIso) => {
     const toCopy = tasks.filter((t) => selectedIds.has(t.id));
     if (toCopy.length === 0) return;
-    toCopy.forEach((t) => apiAddTask(t.text, targetIso));
+    toCopy.forEach((t) => copyTask(t, targetIso));
     setSelectedIds(new Set());
     setSelectedDate(targetIso);
     setViewMode('date');
@@ -1119,18 +1110,6 @@ export default function TodayTasks() {
                 setDatePickerTask(null);
               }}
             />
-            <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
-              <button
-                onClick={() => {
-                  updateTask(datePickerTask.id, { dueDate: null });
-                  setDatePickerTask(null);
-                }}
-                className="mono"
-                style={{ fontSize: '11px', color: '#B5562F', background: '#F3E0D8', border: 'none', cursor: 'pointer', padding: '5px 16px', borderRadius: '999px' }}
-              >
-                날짜 없애기
-              </button>
-            </div>
           </div>
         </div>
       )}
