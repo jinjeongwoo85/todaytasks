@@ -10,8 +10,10 @@ import {
   ChevronLeft,
   CornerDownRight,
   Calendar as CalendarIcon,
-  Copy,
   X,
+  Eye,
+  EyeOff,
+  Settings,
 } from 'lucide-react';
 
 const todayDate = new Date();
@@ -25,11 +27,11 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 const formatDate = (iso) => {
   const d = new Date(iso + 'T00:00:00');
-  return `${d.getMonth() + 1}/${d.getDate()} (${WEEKDAYS[d.getDay()]})`;
+  return `${d.getMonth() + 1}.${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
 };
 const formatShort = (iso) => {
   const d = new Date(iso + 'T00:00:00');
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  return `${d.getMonth() + 1}.${d.getDate()}`;
 };
 
 const dateTone = (iso) => {
@@ -202,28 +204,13 @@ function LabeledDateField({ label, iso, onPick, onClear }) {
   );
 }
 
-function DateChip({ iso, tone, label, onPick }) {
-  const ref = useRef(null);
-
-  const open = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    try { ref.current?.showPicker(); } catch { ref.current?.click(); }
-  };
-
+function DateChip({ tone, label, onOpen }) {
   return (
     <div
-      onClick={open}
+      onClick={(e) => { e.stopPropagation(); e.preventDefault(); onOpen(); }}
       onTouchEnd={(e) => e.stopPropagation()}
       style={{ flexShrink: 0, cursor: 'pointer', position: 'relative' }}
     >
-      <input
-        ref={ref}
-        type="date"
-        value={iso || ''}
-        onChange={(e) => onPick(e.target.value || null)}
-        style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
-      />
       <span className="mono" style={{ display: 'block', fontSize: '11px', padding: '3px 8px', borderRadius: '999px', background: tone.bg, color: tone.fg, whiteSpace: 'nowrap' }}>
         {label}
       </span>
@@ -231,59 +218,115 @@ function DateChip({ iso, tone, label, onPick }) {
   );
 }
 
-function CopyDateButton({ disabled, onPick }) {
-  return (
-    <div style={{ position: 'relative', width: '32px', height: '32px', flexShrink: 0 }}>
-      <input
-        type="date"
-        disabled={disabled}
-        onChange={(e) => {
-          if (e.target.value) onPick(e.target.value);
-          e.target.value = '';
-        }}
-        style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: disabled ? 'default' : 'pointer', zIndex: 1, border: 'none' }}
-      />
-      <div
-        style={{
-          position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: '1px solid #D9D5C7', borderRadius: '10px', color: '#8B8780', opacity: disabled ? 0.4 : 1,
-        }}
-      >
-        <Copy size={14} />
-      </div>
-    </div>
-  );
-}
 
-function SubtaskList({ subtasks, onToggle, onRemove, draft, onDraftChange, onAdd, compact }) {
+function SubtaskList({ subtasks, onToggle, onRemove, draft, onDraftChange, onAdd, compact, onReorder }) {
+  const [subDrag, setSubDrag] = useState(null);
+  const rowRefs = useRef({});
+
+  const startSubDrag = (id, clientY, idx) => {
+    setSubDrag({ id, startY: clientY, currentY: clientY, originalIndex: idx });
+  };
+  const updateSubDrag = (clientY) => {
+    setSubDrag((prev) => prev ? { ...prev, currentY: clientY } : null);
+  };
+  const computeSubDrop = (clientY) => {
+    let idx = subtasks.length;
+    for (let i = 0; i < subtasks.length; i++) {
+      const el = rowRefs.current[subtasks[i].id];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) { idx = i; break; }
+    }
+    return idx;
+  };
+  const commitSubDrag = (clientY) => {
+    if (!subDrag) return;
+    const from = subDrag.originalIndex;
+    const to = computeSubDrop(clientY);
+    if (from !== to && to !== from + 1 && onReorder) {
+      const newIds = subtasks.map((s) => s.id);
+      const [moved] = newIds.splice(from, 1);
+      newIds.splice(to > from ? to - 1 : to, 0, moved);
+      onReorder(newIds);
+    }
+    setSubDrag(null);
+  };
+
+  const LONG_PRESS = 450;
+  const subPressTimer = useRef(null);
+  const subLongFired = useRef(false);
+  const subPressPos = useRef({ x: 0, y: 0 });
+
+  const startSubPress = (id, idx, e) => {
+    subLongFired.current = false;
+    const pt = e.touches ? e.touches[0] : e;
+    subPressPos.current = { x: pt.clientX, y: pt.clientY };
+    subPressTimer.current = setTimeout(() => {
+      subLongFired.current = true;
+      startSubDrag(id, pt.clientY, idx);
+    }, LONG_PRESS);
+  };
+  const cancelSubPress = () => {
+    if (subPressTimer.current) { clearTimeout(subPressTimer.current); subPressTimer.current = null; }
+  };
+  const moveSubPress = (e) => {
+    const pt = e.touches ? e.touches[0] : e;
+    const dx = pt.clientX - subPressPos.current.x;
+    const dy = pt.clientY - subPressPos.current.y;
+    if (!subDrag && Math.sqrt(dx * dx + dy * dy) > 10) cancelSubPress();
+    if (subDrag) { e.preventDefault(); updateSubDrag(pt.clientY); }
+  };
+  const endSubPress = (e) => {
+    cancelSubPress();
+    if (subDrag) {
+      const pt = e.changedTouches ? e.changedTouches[0] : e;
+      commitSubDrag(pt.clientY);
+    }
+  };
+
+  const dropIndex = subDrag ? computeSubDrop(subDrag.currentY) : -1;
+
   return (
     <div>
-      {subtasks.map((s) => (
-        <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: compact ? '5px 0' : '6px 0' }}>
-          <button
-            onClick={() => onToggle(s.id)}
-            style={{
-              width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
-              border: `1.5px solid ${s.done ? '#5C7A5C' : '#A8A29A'}`,
-              background: s.done ? '#5C7A5C' : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0,
-            }}
-            aria-label={s.done ? '완료 취소' : '완료로 표시'}
-          >
-            <Check size={11} color="#F6F4ED" style={{ opacity: s.done ? 1 : 0 }} />
-          </button>
-          <span
-            onClick={() => onToggle(s.id)}
-            style={{ flex: 1, fontSize: compact ? '13px' : '14px', color: s.done ? '#A8A29A' : '#232323', textDecoration: s.done ? 'line-through' : 'none', cursor: 'pointer' }}
-          >
-            {s.text}
-          </span>
-          <button onClick={() => onRemove(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C2BEB3', padding: '2px' }} aria-label="하위 할 일 삭제">
-            <X size={13} />
-          </button>
-        </div>
-      ))}
+      {subtasks.map((s, idx) => {
+        const isDragging = subDrag && subDrag.id === s.id;
+        const showLineAbove = subDrag && dropIndex === idx;
+        const showLineBelow = subDrag && dropIndex === subtasks.length && idx === subtasks.length - 1;
+        return (
+          <div key={s.id} ref={(el) => { rowRefs.current[s.id] = el; }}>
+            {showLineAbove && <div style={{ height: '2px', background: '#5C7A5C', borderRadius: '1px', margin: '2px 0' }} />}
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: compact ? '5px 0' : '6px 0', opacity: isDragging ? 0.4 : 1 }}
+              onTouchStart={(e) => startSubPress(s.id, idx, e)}
+              onTouchMove={moveSubPress}
+              onTouchEnd={endSubPress}
+            >
+              <button
+                onClick={() => onToggle(s.id)}
+                style={{
+                  width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
+                  border: `1.5px solid ${s.done ? '#5C7A5C' : '#A8A29A'}`,
+                  background: s.done ? '#5C7A5C' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0,
+                }}
+                aria-label={s.done ? '완료 취소' : '완료로 표시'}
+              >
+                <Check size={11} color="#F6F4ED" style={{ opacity: s.done ? 1 : 0 }} />
+              </button>
+              <span
+                onClick={() => onToggle(s.id)}
+                style={{ flex: 1, fontSize: compact ? '13px' : '14px', color: s.done ? '#A8A29A' : '#232323', textDecoration: s.done ? 'line-through' : 'none', cursor: 'pointer' }}
+              >
+                {s.text}
+              </span>
+              <button onClick={() => onRemove(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C2BEB3', padding: '2px' }} aria-label="하위 할 일 삭제">
+                <X size={13} />
+              </button>
+            </div>
+            {showLineBelow && <div style={{ height: '2px', background: '#5C7A5C', borderRadius: '1px', margin: '2px 0' }} />}
+          </div>
+        );
+      })}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '6px' }}>
         <CornerDownRight size={14} color="#C2BEB3" />
         <input
@@ -424,6 +467,17 @@ export default function TodayTasks() {
   const [modalSubDraft, setModalSubDraft] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [newTaskDraft, setNewTaskDraft] = useState(null);
+  const [hideCompleted, setHideCompleted] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [datePickerTask, setDatePickerTask] = useState(null);
+  const [datePickerMonth, setDatePickerMonth] = useState(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
+  const [copyPickerOpen, setCopyPickerOpen] = useState(false);
+  const [copyPickerMonth, setCopyPickerMonth] = useState(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
+  const [taskOrder, setTaskOrder] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('todaytasks_order') || '[]'); } catch { return []; }
+  });
+  const [subtaskOrders, setSubtaskOrders] = useState({});
+  const [dragInfo, setDragInfo] = useState(null);
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
   const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask } = useTasks(accessToken);
@@ -431,28 +485,43 @@ export default function TodayTasks() {
   const pressTimerRef = useRef(null);
   const longPressFiredRef = useRef(false);
   const pressStartPosRef = useRef({ x: 0, y: 0 });
+  const pressedIdRef = useRef(null);
   const swipeStartRef = useRef({ x: 0, y: 0 });
   const swipeActiveRef = useRef(false);
+  const containerRef = useRef(null);
+  const taskRowRefs = useRef({});
 
-  // Back navigation (browser/system back) closes the popup or clears a
-  // pending copy-selection instead of leaving the page.
-  // NOTE: Inside the Claude artifact preview, the back gesture is captured
-  // by the host app to close the artifact panel before it ever reaches this
-  // page's JavaScript, so a History API based approach has no effect here.
-  // It's left out for now — use the X / backdrop tap (modal) or "취소"
-  // button (selection) instead. If this is deployed as a standalone web
-  // app later, the History API approach would work as expected there.
+  useEffect(() => {
+    history.replaceState({ appRoot: true }, '');
+    const onPop = () => {
+      if (settingsOpen) { setSettingsOpen(false); history.pushState(null, ''); return; }
+      if (copyPickerOpen) { setCopyPickerOpen(false); history.pushState(null, ''); return; }
+      if (datePickerTask) { setDatePickerTask(null); history.pushState(null, ''); return; }
+      if (calendarOpen) { setCalendarOpen(false); history.pushState(null, ''); return; }
+      if (selectedIds.size > 0) { setSelectedIds(new Set()); history.pushState(null, ''); return; }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [settingsOpen, copyPickerOpen, datePickerTask, calendarOpen, selectedIds]);
 
-  const visibleTasks = viewMode === 'all' ? tasks : tasks.filter((t) => isTaskOnDate(t, selectedDate));
-  const completed = visibleTasks.filter((t) => t.done).length;
-  const total = visibleTasks.length;
+  const getOrderedTasks = () => {
+    const base = viewMode === 'all' ? tasks : tasks.filter((t) => isTaskOnDate(t, selectedDate));
+    const inOrder = taskOrder.map((id) => base.find((t) => t.id === id)).filter(Boolean);
+    const rest = base.filter((t) => !taskOrder.includes(t.id));
+    return [...inOrder, ...rest];
+  };
+
+  const allForDate = getOrderedTasks();
+  const visibleTasks = allForDate.filter((t) => !hideCompleted || !t.done);
+  const completed = allForDate.filter((t) => t.done).length;
+  const total = allForDate.length;
   const pct = total === 0 ? 0 : Math.round((completed / total) * 100);
   const editingTask = tasks.find((t) => t.id === editingTaskId) || null;
 
   const dateLabel = () => {
     if (viewMode === 'all') return '전체';
-    if (selectedDate === TODAY_ISO) return '오늘';
-    if (selectedDate === TOMORROW_ISO) return '내일';
+    if (selectedDate === TODAY_ISO) return `오늘 - ${formatDate(TODAY_ISO)}`;
+    if (selectedDate === TOMORROW_ISO) return `내일 - ${formatDate(TOMORROW_ISO)}`;
     return formatDate(selectedDate);
   };
 
@@ -489,21 +558,39 @@ export default function TodayTasks() {
 
   const startPress = (id, e) => {
     longPressFiredRef.current = false;
+    pressedIdRef.current = null;
     const point = e.touches ? e.touches[0] : e;
     pressStartPosRef.current = { x: point.clientX, y: point.clientY };
     pressTimerRef.current = setTimeout(() => {
       longPressFiredRef.current = true;
-      toggleSelect(id);
+      pressedIdRef.current = id;
     }, LONG_PRESS_MS);
   };
   const cancelPress = () => {
     if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
   };
+  const handlePressEnd = (id) => {
+    cancelPress();
+    if (dragInfo) return;
+    if (longPressFiredRef.current && pressedIdRef.current) {
+      toggleSelect(pressedIdRef.current);
+      longPressFiredRef.current = false;
+      pressedIdRef.current = null;
+    }
+  };
   const handlePressMove = (e) => {
     const point = e.touches ? e.touches[0] : e;
     const dx = point.clientX - pressStartPosRef.current.x;
     const dy = point.clientY - pressStartPosRef.current.y;
-    if (Math.sqrt(dx * dx + dy * dy) > PRESS_MOVE_TOLERANCE) cancelPress();
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (!longPressFiredRef.current) {
+      if (dist > PRESS_MOVE_TOLERANCE) cancelPress();
+    } else if (pressedIdRef.current && !dragInfo && Math.abs(dy) > 5 && Math.abs(dy) > Math.abs(dx)) {
+      const orderedVisible = getOrderedTasks();
+      const idx = orderedVisible.findIndex((t) => t.id === pressedIdRef.current);
+      setDragInfo({ id: pressedIdRef.current, startY: point.clientY, currentY: point.clientY, originalIndex: idx });
+      pressedIdRef.current = null;
+    }
   };
 
   const shiftSelectedDate = (days) => {
@@ -512,10 +599,46 @@ export default function TodayTasks() {
     setSelectedDate(toISO(d));
   };
 
-  // Swipe is tracked separately from long-press. Any real movement cancels a
-  // pending long-press immediately (so a slow swipe can't accidentally flip
-  // into selection mode partway through and block the day change), and the
-  // gesture is only ever acted on once (single touch, single shift).
+  const updateDragY = (clientY) => {
+    if (!dragInfo) return;
+    setDragInfo((prev) => prev ? { ...prev, currentY: clientY } : null);
+  };
+
+  const computeDropIndex = (clientY) => {
+    const rows = visibleTasks.map((t) => {
+      const el = taskRowRefs.current[t.id];
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      return { id: t.id, midY: rect.top + rect.height / 2 };
+    }).filter(Boolean);
+    let idx = rows.length;
+    for (let i = 0; i < rows.length; i++) {
+      if (clientY < rows[i].midY) { idx = i; break; }
+    }
+    return idx;
+  };
+
+  const commitDrag = (clientY) => {
+    if (!dragInfo) return;
+    const fromIdx = dragInfo.originalIndex;
+    const toIdx = computeDropIndex(clientY);
+    if (fromIdx !== toIdx && toIdx !== fromIdx + 1) {
+      const newOrder = visibleTasks.map((t) => t.id);
+      const [moved] = newOrder.splice(fromIdx, 1);
+      const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
+      newOrder.splice(insertAt, 0, moved);
+      setTaskOrder(newOrder);
+      try { localStorage.setItem('todaytasks_order', JSON.stringify(newOrder)); } catch {}
+    }
+    setDragInfo(null);
+  };
+
+  const reorderSubtasks = (taskId, newIds) => {
+    setSubtaskOrders((prev) => ({ ...prev, [taskId]: newIds }));
+  };
+
+  // Swipe is tracked via non-passive listeners (see useEffect below) so we can
+  // call preventDefault() on horizontal gestures and prevent scroll interference.
   const handleSwipeStart = (e) => {
     if (!e.touches || e.touches.length !== 1) { swipeActiveRef.current = false; return; }
     const point = e.touches[0];
@@ -523,13 +646,27 @@ export default function TodayTasks() {
     swipeActiveRef.current = true;
   };
   const handleSwipeMove = (e) => {
-    if (!swipeActiveRef.current || !e.touches || e.touches.length !== 1) return;
+    if (!e.touches || e.touches.length !== 1) return;
     const point = e.touches[0];
+    if (dragInfo) {
+      e.preventDefault();
+      updateDragY(point.clientY);
+      return;
+    }
+    if (!swipeActiveRef.current) return;
     const dx = point.clientX - swipeStartRef.current.x;
     const dy = point.clientY - swipeStartRef.current.y;
     if (Math.sqrt(dx * dx + dy * dy) > PRESS_MOVE_TOLERANCE) cancelPress();
+    if (Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > PRESS_MOVE_TOLERANCE) {
+      e.preventDefault();
+    }
   };
   const handleSwipeEnd = (e) => {
+    if (dragInfo) {
+      const point = e.changedTouches && e.changedTouches[0];
+      if (point) commitDrag(point.clientY);
+      return;
+    }
     if (!swipeActiveRef.current) return;
     swipeActiveRef.current = false;
     if (viewMode !== 'date' || calendarOpen || editingTaskId !== null || selectedIds.size > 0) return;
@@ -541,6 +678,19 @@ export default function TodayTasks() {
       shiftSelectedDate(dx < 0 ? 1 : -1);
     }
   };
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener('touchstart', handleSwipeStart, { passive: false });
+    el.addEventListener('touchmove', handleSwipeMove, { passive: false });
+    el.addEventListener('touchend', handleSwipeEnd);
+    return () => {
+      el.removeEventListener('touchstart', handleSwipeStart);
+      el.removeEventListener('touchmove', handleSwipeMove);
+      el.removeEventListener('touchend', handleSwipeEnd);
+    };
+  });
 
   const handleTextClick = (id) => {
     if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
@@ -558,6 +708,12 @@ export default function TodayTasks() {
     setSelectedIds(new Set());
     setSelectedDate(targetIso);
     setViewMode('date');
+    setCopyPickerOpen(false);
+  };
+
+  const deleteSelected = () => {
+    selectedIds.forEach((id) => removeTask(id));
+    setSelectedIds(new Set());
   };
 
   const addTask = () => {
@@ -624,9 +780,7 @@ export default function TodayTasks() {
 
   return (
     <div
-      onTouchStart={handleSwipeStart}
-      onTouchMove={handleSwipeMove}
-      onTouchEnd={handleSwipeEnd}
+      ref={containerRef}
       style={{ background: '#F6F4ED', minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '32px 16px' }}
     >
       <style>{`
@@ -655,54 +809,69 @@ export default function TodayTasks() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '6px' }}>
           <button onClick={openCalendar} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', color: '#232323', minWidth: 0 }}>
             <CalendarIcon size={16} color="#5C7A5C" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: '19px', fontWeight: 600, whiteSpace: 'nowrap' }}>{dateLabel()} 할 일</span>
+            <span style={{ fontSize: '19px', fontWeight: 600, whiteSpace: 'nowrap' }}>{dateLabel()}</span>
             <ChevronDown size={16} color="#A8A29A" style={{ transform: calendarOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-            {selectedIds.size > 0 && (
-              <span className="mono" style={{ fontSize: '11px', color: '#5C7A5C', whiteSpace: 'nowrap' }}>{selectedIds.size}개 선택</span>
-            )}
-            <CopyDateButton disabled={selectedIds.size === 0} onPick={copySelectedTo} />
             {selectedIds.size > 0 ? (
-              <button
-                onClick={() => setSelectedIds(new Set())}
-                className="mono"
-                style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '10px', background: 'transparent', color: '#8B8780', border: '1px solid #D9D5C7', cursor: 'pointer' }}
-              >
-                취소
-              </button>
+              <>
+                <span className="mono" style={{ fontSize: '11px', color: '#5C7A5C', whiteSpace: 'nowrap' }}>{selectedIds.size}개 선택</span>
+                <button
+                  onClick={() => { setCopyPickerMonth(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)); setCopyPickerOpen(true); }}
+                  className="mono"
+                  style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '10px', background: 'transparent', color: '#8B8780', border: '1px solid #D9D5C7', cursor: 'pointer' }}
+                >
+                  복사
+                </button>
+                <button
+                  onClick={deleteSelected}
+                  className="mono"
+                  style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '10px', background: 'transparent', color: '#B5562F', border: '1px solid #F3E0D8', cursor: 'pointer' }}
+                >
+                  삭제
+                </button>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="mono"
+                  style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '10px', background: 'transparent', color: '#8B8780', border: '1px solid #D9D5C7', cursor: 'pointer' }}
+                >
+                  취소
+                </button>
+              </>
             ) : (
-              <button
-                onClick={() => setViewMode((v) => (v === 'all' ? 'date' : 'all'))}
-                className="mono"
-                style={{
-                  fontSize: '12px', padding: '6px 10px', borderRadius: '10px',
-                  background: viewMode === 'all' ? '#232323' : 'transparent',
-                  color: viewMode === 'all' ? '#F6F4ED' : '#8B8780',
-                  border: viewMode === 'all' ? 'none' : '1px solid #D9D5C7',
-                  cursor: 'pointer',
-                }}
-              >
-                전체
-              </button>
+              <>
+                <button
+                  onClick={() => setHideCompleted((v) => !v)}
+                  title={hideCompleted ? '완료된 할일 보기' : '완료된 할일 숨기기'}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '10px', background: hideCompleted ? '#E3EBE0' : 'transparent', border: hideCompleted ? 'none' : '1px solid #D9D5C7', cursor: 'pointer', color: hideCompleted ? '#4D6B4F' : '#8B8780' }}
+                >
+                  {hideCompleted ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+                <button
+                  onClick={() => setViewMode((v) => (v === 'all' ? 'date' : 'all'))}
+                  className="mono"
+                  style={{
+                    fontSize: '12px', padding: '6px 10px', borderRadius: '10px',
+                    background: viewMode === 'all' ? '#232323' : 'transparent',
+                    color: viewMode === 'all' ? '#F6F4ED' : '#8B8780',
+                    border: viewMode === 'all' ? 'none' : '1px solid #D9D5C7',
+                    cursor: 'pointer',
+                  }}
+                >
+                  전체
+                </button>
+                <button
+                  onClick={() => setSettingsOpen(true)}
+                  title="설정"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '10px', background: 'transparent', border: '1px solid #E3E0D5', cursor: 'pointer', color: '#C0B9B0' }}
+                >
+                  <Settings size={14} />
+                </button>
+              </>
             )}
-            <button
-              onClick={signOut}
-              className="mono"
-              title="로그아웃"
-              style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '10px', background: 'transparent', color: '#C0B9B0', border: '1px solid #E3E0D5', cursor: 'pointer' }}
-            >
-              로그아웃
-            </button>
           </div>
         </div>
-
-        {selectedIds.size > 0 && (
-          <div className="mono" style={{ fontSize: '10px', color: '#A8A29A', marginBottom: '14px', marginTop: '-4px' }}>
-            할 일을 길게 눌러 선택하고, 복사 아이콘으로 날짜를 고르면 그대로 복사됩니다
-          </div>
-        )}
 
         {/* Progress */}
         <div style={{ marginBottom: '20px' }}>
@@ -718,21 +887,28 @@ export default function TodayTasks() {
 
         {/* Task list */}
         <div>
-          {visibleTasks.map((t, i) => {
+          {(() => {
+            const dropIndex = dragInfo ? computeDropIndex(dragInfo.currentY) : -1;
+            return visibleTasks.map((t, i) => {
             const subDone = t.subtasks.filter((s) => s.done).length;
             const tone = toneStyle(t.dueDate);
             const dateLabelText = rowDateLabel(t);
             const selected = selectedIds.has(t.id);
+            const isDragging = dragInfo && dragInfo.id === t.id;
+            const showDropLineAbove = dragInfo && dropIndex === i;
+            const showDropLineBelow = dragInfo && dropIndex === visibleTasks.length && i === visibleTasks.length - 1;
             return (
-              <div key={t.id}>
+              <div key={t.id} ref={(el) => { taskRowRefs.current[t.id] = el; }}>
+                {showDropLineAbove && <div style={{ height: '2px', background: '#5C7A5C', margin: '0 6px', borderRadius: '1px' }} />}
                 <div
                   className="task-row"
                   style={{
                     display: 'flex', alignItems: 'center', padding: '12px 6px',
                     margin: '0 -6px', borderRadius: '8px',
-                    opacity: t.done ? 0.5 : 1,
-                    background: selected ? '#EAE7DC' : 'transparent',
+                    opacity: isDragging ? 0.4 : t.done ? 0.5 : 1,
+                    background: isDragging ? '#EAE7DC' : selected ? '#EAE7DC' : 'transparent',
                     borderLeft: selected ? '3px solid #5C7A5C' : '3px solid transparent',
+                    transform: isDragging ? 'scale(1.02)' : 'none',
                   }}
                 >
                   <button
@@ -751,10 +927,10 @@ export default function TodayTasks() {
                   <div
                     onClick={() => handleTextClick(t.id)}
                     onTouchStart={(e) => startPress(t.id, e)}
-                    onTouchEnd={cancelPress}
+                    onTouchEnd={() => handlePressEnd(t.id)}
                     onTouchMove={handlePressMove}
                     onMouseDown={(e) => startPress(t.id, e)}
-                    onMouseUp={cancelPress}
+                    onMouseUp={() => handlePressEnd(t.id)}
                     onMouseLeave={cancelPress}
                     style={{
                       flex: 1, display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
@@ -781,10 +957,13 @@ export default function TodayTasks() {
 
                   {dateLabelText && (
                     <DateChip
-                      iso={t.dueDate}
                       tone={tone}
                       label={dateLabelText}
-                      onPick={(v) => updateTask(t.id, { dueDate: v })}
+                      onOpen={() => {
+                        const d = t.dueDate ? new Date(t.dueDate + 'T00:00:00') : todayDate;
+                        setDatePickerMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+                        setDatePickerTask({ id: t.id, iso: t.dueDate });
+                      }}
                     />
                   )}
 
@@ -800,21 +979,30 @@ export default function TodayTasks() {
                 {t.expanded && (
                   <div className="expand-panel" style={{ paddingLeft: '32px', paddingBottom: '12px' }}>
                     <SubtaskList
-                      subtasks={t.subtasks}
+                      subtasks={(() => {
+                        const order = subtaskOrders[t.id];
+                        if (!order) return t.subtasks;
+                        const inOrder = order.map((id) => t.subtasks.find((s) => s.id === id)).filter(Boolean);
+                        const rest = t.subtasks.filter((s) => !order.includes(s.id));
+                        return [...inOrder, ...rest];
+                      })()}
                       onToggle={(subId) => toggleSubtask(t.id, subId)}
                       onRemove={(subId) => removeSubtask(t.id, subId)}
                       draft={subDrafts[t.id] || ''}
                       onDraftChange={(v) => setSubDrafts((prev) => ({ ...prev, [t.id]: v }))}
                       onAdd={() => { addSubtask(t.id, subDrafts[t.id] || ''); setSubDrafts((prev) => ({ ...prev, [t.id]: '' })); }}
+                      onReorder={(newIds) => reorderSubtasks(t.id, newIds)}
                       compact
                     />
                   </div>
                 )}
 
-                {i < visibleTasks.length - 1 && <div style={{ borderBottom: '1px dotted #D9D5C7' }} />}
+                {showDropLineBelow && <div style={{ height: '2px', background: '#5C7A5C', margin: '4px 6px', borderRadius: '1px' }} />}
+                {i < visibleTasks.length - 1 && !showDropLineAbove && <div style={{ borderBottom: '1px dotted #D9D5C7' }} />}
               </div>
             );
-          })}
+          });
+          })()}
 
           {visibleTasks.length === 0 && (
             <div className="mono" style={{ textAlign: 'center', padding: '32px 0', color: '#A8A29A', fontSize: '13px' }}>
@@ -861,6 +1049,96 @@ export default function TodayTasks() {
               onPrevMonth={() => setCalendarMonth((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}
               onNextMonth={() => setCalendarMonth((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}
               onToday={jumpToday}
+            />
+          </div>
+        </div>
+      )}
+
+      {datePickerTask && (
+        <div
+          onClick={() => setDatePickerTask(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(35,35,35,0.38)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 40 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="sheet-rise sans"
+            style={{ width: '100%', maxWidth: '480px', background: '#F6F4ED', borderRadius: '20px 20px 0 0', padding: '10px 20px 32px', boxSizing: 'border-box' }}
+          >
+            <div style={{ width: '36px', height: '4px', background: '#D9D5C7', borderRadius: '2px', margin: '0 auto 12px' }} />
+            <MonthCalendar
+              monthDate={datePickerMonth}
+              selectedDate={datePickerTask.iso || ''}
+              tasks={tasks}
+              onSelect={(iso) => {
+                updateTask(datePickerTask.id, { dueDate: iso });
+                setDatePickerTask(null);
+              }}
+              onPrevMonth={() => setDatePickerMonth((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}
+              onNextMonth={() => setDatePickerMonth((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}
+              onToday={() => {
+                setDatePickerMonth(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
+                updateTask(datePickerTask.id, { dueDate: TODAY_ISO });
+                setDatePickerTask(null);
+              }}
+            />
+            <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
+              <button
+                onClick={() => {
+                  updateTask(datePickerTask.id, { dueDate: null });
+                  setDatePickerTask(null);
+                }}
+                className="mono"
+                style={{ fontSize: '11px', color: '#B5562F', background: '#F3E0D8', border: 'none', cursor: 'pointer', padding: '5px 16px', borderRadius: '999px' }}
+              >
+                날짜 없애기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div
+          onClick={() => setSettingsOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(35,35,35,0.38)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 40 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="sheet-rise sans"
+            style={{ width: '100%', maxWidth: '480px', background: '#F6F4ED', borderRadius: '20px 20px 0 0', padding: '10px 20px 40px', boxSizing: 'border-box' }}
+          >
+            <div style={{ width: '36px', height: '4px', background: '#D9D5C7', borderRadius: '2px', margin: '0 auto 20px' }} />
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#232323', marginBottom: '20px' }}>설정</div>
+            <button
+              onClick={() => { signOut(); setSettingsOpen(false); }}
+              style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #E3E0D5', background: '#FAF8F3', color: '#B5562F', fontSize: '14px', cursor: 'pointer', textAlign: 'left' }}
+            >
+              로그아웃
+            </button>
+          </div>
+        </div>
+      )}
+
+      {copyPickerOpen && (
+        <div
+          onClick={() => setCopyPickerOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(35,35,35,0.38)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 40 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="sheet-rise sans"
+            style={{ width: '100%', maxWidth: '480px', background: '#F6F4ED', borderRadius: '20px 20px 0 0', padding: '10px 20px 32px', boxSizing: 'border-box' }}
+          >
+            <div style={{ width: '36px', height: '4px', background: '#D9D5C7', borderRadius: '2px', margin: '0 auto 12px' }} />
+            <div className="mono" style={{ fontSize: '11px', color: '#8B8780', marginBottom: '12px', textAlign: 'center' }}>복사할 날짜를 선택하세요</div>
+            <MonthCalendar
+              monthDate={copyPickerMonth}
+              selectedDate={selectedDate}
+              tasks={tasks}
+              onSelect={copySelectedTo}
+              onPrevMonth={() => setCopyPickerMonth((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}
+              onNextMonth={() => setCopyPickerMonth((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}
+              onToday={() => { setCopyPickerMonth(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)); copySelectedTo(TODAY_ISO); }}
             />
           </div>
         </div>
