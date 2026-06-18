@@ -508,18 +508,39 @@ export default function TodayTasks() {
   const taskRowRefs = useRef({});
   const latestStateRef = useRef({});
   const swipeHandlersRef = useRef({});
+  const backEntryPushedRef = useRef(false);
 
-  latestStateRef.current = { settingsOpen, copyPickerOpen, datePickerTask, calendarOpen, selectedIds };
+  // anyLayerOpen is a boolean primitive — safe as useEffect dependency
+  const anyLayerOpen = calendarOpen || settingsOpen || !!datePickerTask || copyPickerOpen ||
+    selectedIds.size > 0 || editingTaskId !== null || newTaskDraft !== null;
 
+  latestStateRef.current = { settingsOpen, copyPickerOpen, datePickerTask, calendarOpen, selectedIds, editingTaskId, newTaskDraft };
+
+  // Push a history entry the moment the first layer opens so the back button
+  // has something to pop. Reset when all layers close so the next open re-pushes.
+  useEffect(() => {
+    if (anyLayerOpen && !backEntryPushedRef.current) {
+      history.pushState({ backIntercept: true }, '');
+      backEntryPushedRef.current = true;
+    } else if (!anyLayerOpen) {
+      backEntryPushedRef.current = false;
+    }
+  }, [anyLayerOpen]);
+
+  // Register popstate once on mount. Reads latest state via ref — no stale closures.
   useEffect(() => {
     history.replaceState({ appBase: true }, '');
     const onPop = () => {
+      // Reset so anyLayerOpen effect can re-push if layers remain open
+      backEntryPushedRef.current = false;
       const s = latestStateRef.current;
-      if (s.settingsOpen) { setSettingsOpen(false); history.pushState(null, ''); return; }
-      if (s.copyPickerOpen) { setCopyPickerOpen(false); history.pushState(null, ''); return; }
-      if (s.datePickerTask) { setDatePickerTask(null); history.pushState(null, ''); return; }
-      if (s.calendarOpen) { setCalendarOpen(false); history.pushState(null, ''); return; }
-      if (s.selectedIds.size > 0) { setSelectedIds(new Set()); history.pushState(null, ''); return; }
+      if (s.editingTaskId !== null) { setEditingTaskId(null); setModalSubDraft(''); return; }
+      if (s.newTaskDraft !== null) { setNewTaskDraft(null); return; }
+      if (s.settingsOpen) { setSettingsOpen(false); return; }
+      if (s.copyPickerOpen) { setCopyPickerOpen(false); return; }
+      if (s.datePickerTask) { setDatePickerTask(null); return; }
+      if (s.calendarOpen) { setCalendarOpen(false); return; }
+      if (s.selectedIds.size > 0) { setSelectedIds(new Set()); return; }
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
