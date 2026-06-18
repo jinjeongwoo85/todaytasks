@@ -36,6 +36,14 @@ export const C = {
   // 경고/위험(연한 벽돌색)
   danger: '#B5562F',
   dangerBorder: '#E3B8A8',
+
+  // 톤 배경(직접 참조되는 곳들 — 헤더 토글·달력 today 셀·삭제 버튼 테두리 등)
+  todayBg: '#E3EBE0',    // TONE.today.bg와 동일 (today 강조 배경)
+  overdueBg: '#F3E0D8',  // TONE.overdue.bg와 동일 (삭제 버튼 테두리 등)
+
+  // 기타
+  offlineBg: '#EDE8DC',  // 오프라인 배너 배경
+  calWeekday: '#B0A99E', // 달력 평일 요일 레이블
 };
 
 // 날짜 톤 — dueDate가 과거/오늘/미래/없음일 때의 배경·전경·테두리.

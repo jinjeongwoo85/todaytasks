@@ -27,6 +27,12 @@ export const tomorrowISO = () => {
 // 'YYYY-MM-DD' → Date (로컬 자정)
 export const isoToDate = (iso) => new Date(iso + 'T00:00:00');
 
+// iso(또는 미지정 시 오늘)가 속한 달의 1일 Date — 달력 월 네비게이션 초기값에 사용
+export const monthStartOf = (iso) => {
+  const d = iso ? isoToDate(iso) : new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+};
+
 // 6.16(화)
 export const formatDate = (iso) => {
   const d = isoToDate(iso);
