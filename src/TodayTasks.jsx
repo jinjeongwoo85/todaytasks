@@ -164,41 +164,24 @@ function MonthCalendar({ monthDate, selectedDate, tasks, onSelect, onPrevMonth, 
   );
 }
 
-function LabeledDateField({ label, iso, onPick, onClear }) {
-  const ref = useRef(null);
+function LabeledDateField({ label, iso, onOpen, onClear }) {
   const tone = toneStyle(iso);
-
-  const open = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    try { ref.current?.showPicker(); } catch { ref.current?.click(); }
-  };
-
   return (
     <div style={{ flex: 1 }}>
       <div className="mono" style={{ fontSize: '10px', color: '#8B8780', marginBottom: '4px' }}>{label}</div>
-      <div style={{ position: 'relative' }}>
-        <input
-          ref={ref}
-          type="date"
-          value={iso || ''}
-          onChange={(e) => onPick(e.target.value)}
-          style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
-        />
-        <div
-          className="mono"
-          onClick={open}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            fontSize: '13px', padding: '8px', borderRadius: '8px', boxSizing: 'border-box', cursor: 'pointer',
-            background: tone.bg, color: iso ? tone.fg : '#A8A29A', border: `1px solid ${iso ? tone.border : '#D9D5C7'}`,
-          }}
-        >
-          <span>{iso ? formatDate(iso) : '설정 안함'}</span>
-          {iso && (
-            <X size={12} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); e.preventDefault(); onClear(); }} />
-          )}
-        </div>
+      <div
+        className="mono"
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); onOpen(); }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontSize: '13px', padding: '8px', borderRadius: '8px', boxSizing: 'border-box', cursor: 'pointer',
+          background: tone.bg, color: iso ? tone.fg : '#A8A29A', border: `1px solid ${iso ? tone.border : '#D9D5C7'}`,
+        }}
+      >
+        <span>{iso ? formatDate(iso) : '설정 안함'}</span>
+        {iso && (
+          <X size={12} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); e.preventDefault(); onClear(); }} />
+        )}
       </div>
     </div>
   );
@@ -347,6 +330,8 @@ function SubtaskList({ subtasks, onToggle, onRemove, draft, onDraftChange, onAdd
 function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onSave, onChange, onDelete, onToggleSubtask, onRemoveSubtask, onAddSubtask }) {
   const notesRef = useRef(null);
   const titleRef = useRef(null);
+  const [pickerField, setPickerField] = useState(null);
+  const [pickerMonth, setPickerMonth] = useState(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
 
   useEffect(() => {
     if (notesRef.current) {
@@ -364,6 +349,13 @@ function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onS
     onChange({ notes: e.target.value });
     e.target.style.height = 'auto';
     e.target.style.height = e.target.scrollHeight + 'px';
+  };
+
+  const openPicker = (field) => {
+    const iso = field === 'date' ? task.date : task.dueDate;
+    const d = iso ? new Date(iso + 'T00:00:00') : todayDate;
+    setPickerMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+    setPickerField(field);
   };
 
   return (
@@ -398,8 +390,8 @@ function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onS
         />
 
         <div style={{ display: 'flex', gap: '10px', marginBottom: '6px' }}>
-          <LabeledDateField label="시작날짜" iso={task.date} onPick={(v) => onChange({ date: v })} onClear={() => onChange({ date: null })} />
-          <LabeledDateField label="종료날짜" iso={task.dueDate} onPick={(v) => onChange({ dueDate: v })} onClear={() => onChange({ dueDate: null })} />
+          <LabeledDateField label="시작날짜" iso={task.date} onOpen={() => openPicker('date')} onClear={() => onChange({ date: null })} />
+          <LabeledDateField label="종료날짜" iso={task.dueDate} onOpen={() => openPicker('dueDate')} onClear={() => onChange({ dueDate: null })} />
         </div>
         <div className="mono" style={{ fontSize: '10px', color: '#A8A29A', marginBottom: '18px' }}>
           시작날짜와 종료날짜를 다르게 설정하면 그 사이 모든 날에 표시됩니다
@@ -451,6 +443,39 @@ function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onS
             </button>
           )}
         </div>
+
+        {pickerField && (
+          <div
+            onClick={() => setPickerField(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(35,35,35,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 60 }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="sheet-rise sans"
+              style={{ width: '100%', maxWidth: '480px', background: '#F6F4ED', borderRadius: '20px 20px 0 0', padding: '10px 20px 32px', boxSizing: 'border-box' }}
+            >
+              <div style={{ width: '36px', height: '4px', background: '#D9D5C7', borderRadius: '2px', margin: '0 auto 12px' }} />
+              <MonthCalendar
+                monthDate={pickerMonth}
+                selectedDate={(pickerField === 'date' ? task.date : task.dueDate) || ''}
+                tasks={[]}
+                onSelect={(iso) => { onChange({ [pickerField]: iso }); setPickerField(null); }}
+                onPrevMonth={() => setPickerMonth((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}
+                onNextMonth={() => setPickerMonth((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}
+                onToday={() => { setPickerMonth(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)); onChange({ [pickerField]: TODAY_ISO }); setPickerField(null); }}
+              />
+              <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
+                <button
+                  onClick={() => { onChange({ [pickerField]: null }); setPickerField(null); }}
+                  className="mono"
+                  style={{ fontSize: '11px', color: '#B5562F', background: '#F3E0D8', border: 'none', cursor: 'pointer', padding: '5px 16px', borderRadius: '999px' }}
+                >
+                  날짜 없애기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -490,19 +515,24 @@ export default function TodayTasks() {
   const swipeActiveRef = useRef(false);
   const containerRef = useRef(null);
   const taskRowRefs = useRef({});
+  const latestStateRef = useRef({});
+  const swipeHandlersRef = useRef({});
+
+  latestStateRef.current = { settingsOpen, copyPickerOpen, datePickerTask, calendarOpen, selectedIds };
 
   useEffect(() => {
-    history.replaceState({ appRoot: true }, '');
+    history.replaceState({ appBase: true }, '');
     const onPop = () => {
-      if (settingsOpen) { setSettingsOpen(false); history.pushState(null, ''); return; }
-      if (copyPickerOpen) { setCopyPickerOpen(false); history.pushState(null, ''); return; }
-      if (datePickerTask) { setDatePickerTask(null); history.pushState(null, ''); return; }
-      if (calendarOpen) { setCalendarOpen(false); history.pushState(null, ''); return; }
-      if (selectedIds.size > 0) { setSelectedIds(new Set()); history.pushState(null, ''); return; }
+      const s = latestStateRef.current;
+      if (s.settingsOpen) { setSettingsOpen(false); history.pushState(null, ''); return; }
+      if (s.copyPickerOpen) { setCopyPickerOpen(false); history.pushState(null, ''); return; }
+      if (s.datePickerTask) { setDatePickerTask(null); history.pushState(null, ''); return; }
+      if (s.calendarOpen) { setCalendarOpen(false); history.pushState(null, ''); return; }
+      if (s.selectedIds.size > 0) { setSelectedIds(new Set()); history.pushState(null, ''); return; }
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, [settingsOpen, copyPickerOpen, datePickerTask, calendarOpen, selectedIds]);
+  }, []);
 
   const getOrderedTasks = () => {
     const base = viewMode === 'all' ? tasks : tasks.filter((t) => isTaskOnDate(t, selectedDate));
@@ -637,8 +667,8 @@ export default function TodayTasks() {
     setSubtaskOrders((prev) => ({ ...prev, [taskId]: newIds }));
   };
 
-  // Swipe is tracked via non-passive listeners (see useEffect below) so we can
-  // call preventDefault() on horizontal gestures and prevent scroll interference.
+  // Swipe is tracked via non-passive listeners registered once on mount.
+  // swipeHandlersRef.current is updated every render so handlers always see fresh state.
   const handleSwipeStart = (e) => {
     if (!e.touches || e.touches.length !== 1) { swipeActiveRef.current = false; return; }
     const point = e.touches[0];
@@ -679,18 +709,23 @@ export default function TodayTasks() {
     }
   };
 
+  swipeHandlersRef.current = { start: handleSwipeStart, move: handleSwipeMove, end: handleSwipeEnd };
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    el.addEventListener('touchstart', handleSwipeStart, { passive: false });
-    el.addEventListener('touchmove', handleSwipeMove, { passive: false });
-    el.addEventListener('touchend', handleSwipeEnd);
+    const onStart = (e) => swipeHandlersRef.current.start(e);
+    const onMove = (e) => swipeHandlersRef.current.move(e);
+    const onEnd = (e) => swipeHandlersRef.current.end(e);
+    el.addEventListener('touchstart', onStart, { passive: false });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
     return () => {
-      el.removeEventListener('touchstart', handleSwipeStart);
-      el.removeEventListener('touchmove', handleSwipeMove);
-      el.removeEventListener('touchend', handleSwipeEnd);
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
     };
-  });
+  }, []);
 
   const handleTextClick = (id) => {
     if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
@@ -781,7 +816,7 @@ export default function TodayTasks() {
   return (
     <div
       ref={containerRef}
-      style={{ background: '#F6F4ED', minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '32px 16px' }}
+      style={{ background: '#F6F4ED', minHeight: '100vh', display: 'flex', justifyContent: 'center' }}
     >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
@@ -799,7 +834,9 @@ export default function TodayTasks() {
         }
       `}</style>
 
-      <div className="sans" style={{ width: '100%', maxWidth: '380px' }}>
+      <div className="sans" style={{ width: '100%', maxWidth: '380px', padding: '0 16px', boxSizing: 'border-box' }}>
+        {/* Sticky header: date selector + progress bar always visible */}
+        <div style={{ position: 'sticky', top: 0, background: '#F6F4ED', zIndex: 10, paddingTop: '32px', paddingBottom: '4px' }}>
         {isOffline && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', marginBottom: '10px', borderRadius: '10px', background: '#EDE8DC', color: '#6B6862', fontSize: '12px' }}>
             <span>●</span> 오프라인 — 저장된 데이터를 표시 중
@@ -874,7 +911,7 @@ export default function TodayTasks() {
         </div>
 
         {/* Progress */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6px' }}>
             <span className="mono" style={{ fontSize: '15px', color: '#5C7A5C', fontWeight: 600 }}>
               {String(completed).padStart(2, '0')} / {String(total).padStart(2, '0')}
@@ -884,6 +921,7 @@ export default function TodayTasks() {
             <div className="progress-fill" style={{ height: '100%', width: `${pct}%`, background: '#5C7A5C' }} />
           </div>
         </div>
+        </div>{/* end sticky header */}
 
         {/* Task list */}
         <div>
