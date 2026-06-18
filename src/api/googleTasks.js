@@ -20,8 +20,15 @@ export async function fetchTasks(token, listId) {
   return data.items || [];
 }
 
-export async function createTask(token, listId, body) {
-  const res = await fetch(`${BASE}/lists/${listId}/tasks`, {
+// parent/previous는 반드시 쿼리 파라미터로 보내야 한다.
+// Google Tasks `tasks.insert`는 body의 parent를 무시하므로, body에 넣으면 하위 할일이
+// 부모 밑에 중첩되지 않고 최상위로 생성된다(버그 B의 원인).
+export async function createTask(token, listId, body, { parent, previous } = {}) {
+  const params = new URLSearchParams();
+  if (parent) params.set('parent', parent);
+  if (previous) params.set('previous', previous);
+  const qs = params.toString();
+  const res = await fetch(`${BASE}/lists/${listId}/tasks${qs ? `?${qs}` : ''}`, {
     method: 'POST',
     headers: h(token),
     body: JSON.stringify(body),

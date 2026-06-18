@@ -58,7 +58,7 @@ async function flushPendingOps(token, listId) {
 
       } else if (op.type === 'addSubtask') {
         const parentId = resolve(p.taskId);
-        const g = await api.createTask(token, listId, { title: p.text, parent: parentId, status: 'needsAction' });
+        const g = await api.createTask(token, listId, { title: p.text, status: 'needsAction' }, { parent: parentId });
         tempIdMap[p.tempId] = g.id;
         await db.tasks.delete(p.tempId);
         await db.tasks.put({ id: g.id, _listId: listId, _parentId: parentId, text: p.text, done: false, dueDate: null, date: null, notes: '' });
@@ -135,7 +135,7 @@ export function useTasks(accessToken) {
             ...gToLocal(pt, lid),
             subtasks: children
               .filter((ct) => ct.parent === pt.id)
-              .map((ct) => ({ id: ct.id, text: ct.title || '', done: ct.status === 'completed' })),
+              .map((ct) => ({ id: ct.id, text: ct.title || '', done: ct.status === 'completed', dueDate: ct.due ? ct.due.split('T')[0] : null, notes: ct.notes || '' })),
           }));
 
           if (!cancelled) {
@@ -243,7 +243,7 @@ export function useTasks(accessToken) {
       return;
     }
     try {
-      const g = await api.createTask(accessToken, listId, { title: trimmed, parent: taskId, status: 'needsAction' });
+      const g = await api.createTask(accessToken, listId, { title: trimmed, status: 'needsAction' }, { parent: taskId });
       setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, subtasks: t.subtasks.map((s) => s.id === oid ? { ...s, id: g.id } : s) } : t));
       db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: taskId, text: trimmed, done: false, dueDate: null, date: null, notes: '' })).catch(() => {});
     } catch {
@@ -313,7 +313,7 @@ export function useTasks(accessToken) {
         setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: sub.text, done: false }] } : t));
         db.tasks.put({ id: subOid, _listId: listId, _parentId: g.id, text: sub.text, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
         try {
-          const sg = await api.createTask(accessToken, listId, { title: sub.text, parent: g.id, status: 'needsAction' });
+          const sg = await api.createTask(accessToken, listId, { title: sub.text, status: 'needsAction' }, { parent: g.id });
           setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: t.subtasks.map((s) => s.id === subOid ? { ...s, id: sg.id } : s) } : t));
           db.tasks.delete(subOid).then(() => db.tasks.put({ id: sg.id, _listId: listId, _parentId: g.id, text: sub.text, done: false, dueDate: null, date: null, notes: '' })).catch(() => {});
         } catch {

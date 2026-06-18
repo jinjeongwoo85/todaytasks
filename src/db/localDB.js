@@ -23,7 +23,8 @@ export async function saveTasksToDb(listId, tasks) {
     for (const s of t.subtasks) {
       flat.push({
         id: s.id, _listId: listId, _parentId: t.id,
-        text: s.text, done: s.done, dueDate: null, date: null, notes: '',
+        // 하위 할일의 날짜/노트 보존 (기존엔 null/''로 버렸음 — 버그 B 데이터 모델 측면)
+        text: s.text, done: s.done, dueDate: s.dueDate ?? null, date: null, notes: s.notes ?? '',
       });
     }
   }
@@ -47,7 +48,7 @@ export async function loadTasksFromDb() {
     expanded: false, _listId: listId, _parentId: null,
     subtasks: children
       .filter((c) => c._parentId === p.id)
-      .map((c) => ({ id: c.id, text: c.text, done: c.done })),
+      .map((c) => ({ id: c.id, text: c.text, done: c.done, dueDate: c.dueDate ?? null, notes: c.notes ?? '' })),
   }));
 
   return { listId, tasks };
