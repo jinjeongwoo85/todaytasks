@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { useTasks } from './hooks/useTasks';
 import {
   Plus,
   Trash2,
@@ -13,12 +15,8 @@ import {
 } from 'lucide-react';
 
 const todayDate = new Date();
-const yesterdayDate = new Date(todayDate);
-yesterdayDate.setDate(todayDate.getDate() - 1);
 const tomorrowDate = new Date(todayDate);
 tomorrowDate.setDate(todayDate.getDate() + 1);
-const nextWeekDate = new Date(todayDate);
-nextWeekDate.setDate(todayDate.getDate() + 5);
 
 const toISO = (d) => d.toISOString().split('T')[0];
 const TODAY_ISO = toISO(todayDate);
@@ -66,34 +64,11 @@ const rowDateLabel = (t) => {
 const newId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 const LONG_PRESS_MS = 450;
 
-const initialTasks = [
-  { id: 1, text: '예산 보고서 초안 작성', done: false, dueDate: TODAY_ISO, date: null, notes: '', expanded: false, subtasks: [] },
-  { id: 2, text: '14시 회의 자료 준비', done: true, dueDate: TODAY_ISO, date: null, notes: '', expanded: false, subtasks: [] },
-  {
-    id: 3,
-    text: '[R] 운동',
-    done: false,
-    dueDate: TOMORROW_ISO,
-    date: null,
-    notes: '',
-    expanded: true,
-    subtasks: [
-      { id: 31, text: 'ST 10', done: false },
-      { id: 32, text: 'SQ 100', done: false },
-      { id: 33, text: 'PU 20', done: false },
-      { id: 34, text: 'C 20', done: false },
-    ],
-  },
-  { id: 4, text: '민원 회신 이메일 발송', done: false, dueDate: null, date: null, notes: '', expanded: false, subtasks: [] },
-  { id: 5, text: '작년도 결산 자료 정리', done: false, dueDate: toISO(yesterdayDate), date: null, notes: '', expanded: false, subtasks: [] },
-  { id: 6, text: '워크숍 발표자료 준비', done: false, dueDate: toISO(nextWeekDate), date: TODAY_ISO, notes: '여러 날에 걸쳐 준비하는 작업', expanded: false, subtasks: [] },
-];
 
 function MonthCalendar({ monthDate, selectedDate, tasks, onSelect, onPrevMonth, onNextMonth, onToday }) {
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const startWeekday = firstDay.getDay();
+  const startWeekday = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const cells = [];
@@ -101,95 +76,125 @@ function MonthCalendar({ monthDate, selectedDate, tasks, onSelect, onPrevMonth, 
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   return (
-    <div className="expand-panel" style={{ background: '#FFFFFF', border: '1px solid #E3E0D5', borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-        <button onClick={onPrevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8B8780', padding: '4px' }} aria-label="이전 달">
+    <div style={{
+      background: '#FAF8F3', border: '1px solid #E3E0D5', borderRadius: '16px',
+      padding: '16px 14px 14px',
+    }}>
+      {/* 월 헤더 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <button onClick={onPrevMonth} style={{ background: '#EFECE4', border: 'none', cursor: 'pointer', color: '#6B6862', padding: '6px 8px', borderRadius: '10px', display: 'flex', alignItems: 'center' }} aria-label="이전 달">
           <ChevronLeft size={16} />
         </button>
-        <span className="mono" style={{ fontSize: '13px', fontWeight: 600, color: '#232323' }}>
+        <span className="sans" style={{ fontSize: '15px', fontWeight: 700, color: '#232323', letterSpacing: '-0.01em' }}>
           {year}년 {month + 1}월
         </span>
-        <button onClick={onNextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8B8780', padding: '4px' }} aria-label="다음 달">
+        <button onClick={onNextMonth} style={{ background: '#EFECE4', border: 'none', cursor: 'pointer', color: '#6B6862', padding: '6px 8px', borderRadius: '10px', display: 'flex', alignItems: 'center' }} aria-label="다음 달">
           <ChevronRight size={16} />
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: '4px' }}>
+      {/* 요일 레이블 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: '6px' }}>
         {WEEKDAYS.map((w, i) => (
-          <div key={i} className="mono" style={{ textAlign: 'center', fontSize: '10px', color: '#A8A29A' }}>
+          <div key={i} className="mono" style={{
+            textAlign: 'center', fontSize: '11px', fontWeight: 500,
+            color: i === 0 ? '#C0624A' : i === 6 ? '#6080A8' : '#B0A99E',
+            paddingBottom: '2px',
+          }}>
             {w}
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', rowGap: '2px' }}>
+      {/* 날짜 셀 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', rowGap: '4px' }}>
         {cells.map((day, idx) => {
           if (day === null) return <div key={idx} />;
           const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const dow = new Date(iso + 'T00:00:00').getDay();
           const isToday = iso === TODAY_ISO;
           const isSelected = iso === selectedDate;
           const hasTasks = tasks.some((t) => isTaskOnDate(t, iso));
+
+          const bg = isSelected ? '#232323' : isToday ? '#E3EBE0' : 'transparent';
+          const textColor = isSelected ? '#F6F4ED'
+            : isToday ? '#3D5B3F'
+            : dow === 0 ? '#C0624A'
+            : dow === 6 ? '#6080A8'
+            : '#232323';
+
           return (
             <button
               key={idx}
               onClick={() => onSelect(iso)}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                aspectRatio: '1', borderRadius: '8px', margin: '1px',
-                border: !isSelected && isToday ? '1px solid #5C7A5C' : '1px solid transparent',
-                background: isSelected ? '#232323' : 'transparent', cursor: 'pointer', padding: 0,
+                aspectRatio: '1', borderRadius: '12px', margin: '1px',
+                border: 'none', background: bg, cursor: 'pointer', padding: 0,
               }}
             >
-              <span style={{ fontSize: '13px', color: isSelected ? '#F6F4ED' : '#232323' }}>{day}</span>
-              <span
-                style={{
-                  width: '3px', height: '3px', borderRadius: '50%', marginTop: '1px',
-                  background: hasTasks ? (isSelected ? '#F6F4ED' : '#5C7A5C') : 'transparent',
-                }}
-              />
+              <span style={{ fontSize: '15px', fontWeight: isSelected || isToday ? 600 : 400, color: textColor, lineHeight: 1 }}>
+                {day}
+              </span>
+              <span style={{
+                width: '4px', height: '4px', borderRadius: '50%', marginTop: '3px',
+                background: hasTasks ? (isSelected ? '#A8C4AA' : '#5C7A5C') : 'transparent',
+              }} />
             </button>
           );
         })}
       </div>
 
-      <button
-        onClick={onToday}
-        className="mono"
-        style={{ marginTop: '10px', fontSize: '11px', color: '#5C7A5C', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-      >
-        오늘로 이동
-      </button>
+      {/* 오늘로 이동 */}
+      <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'center' }}>
+        <button
+          onClick={onToday}
+          className="mono"
+          style={{
+            fontSize: '11px', color: '#4D6B4F', background: '#E3EBE0',
+            border: 'none', cursor: 'pointer', padding: '5px 14px', borderRadius: '999px',
+          }}
+        >
+          오늘로 이동
+        </button>
+      </div>
     </div>
   );
 }
 
-// Single-tap native date picker: an invisible <input type="date"> is overlaid
-// directly on top of the visible chip, so the very first tap IS the tap on
-// the real input (no intermediate "enable editing" step needed).
 function LabeledDateField({ label, iso, onPick, onClear }) {
+  const ref = useRef(null);
   const tone = toneStyle(iso);
+
+  const open = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try { ref.current?.showPicker(); } catch { ref.current?.click(); }
+  };
+
   return (
     <div style={{ flex: 1 }}>
       <div className="mono" style={{ fontSize: '10px', color: '#8B8780', marginBottom: '4px' }}>{label}</div>
       <div style={{ position: 'relative' }}>
         <input
+          ref={ref}
           type="date"
           value={iso || ''}
           onChange={(e) => onPick(e.target.value)}
-          style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 1, border: 'none' }}
+          style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
         />
         <div
           className="mono"
+          onClick={open}
           style={{
-            position: 'relative', zIndex: 2, pointerEvents: 'none',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            fontSize: '13px', padding: '8px', borderRadius: '8px', boxSizing: 'border-box',
+            fontSize: '13px', padding: '8px', borderRadius: '8px', boxSizing: 'border-box', cursor: 'pointer',
             background: tone.bg, color: iso ? tone.fg : '#A8A29A', border: `1px solid ${iso ? tone.border : '#D9D5C7'}`,
           }}
         >
           <span>{iso ? formatDate(iso) : '설정 안함'}</span>
           {iso && (
-            <X size={12} style={{ pointerEvents: 'auto', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); e.preventDefault(); onClear(); }} />
+            <X size={12} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); e.preventDefault(); onClear(); }} />
           )}
         </div>
       </div>
@@ -197,7 +202,35 @@ function LabeledDateField({ label, iso, onPick, onClear }) {
   );
 }
 
-// Same single-tap overlay trick for the header's "copy to date" action.
+function DateChip({ iso, tone, label, onPick }) {
+  const ref = useRef(null);
+
+  const open = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try { ref.current?.showPicker(); } catch { ref.current?.click(); }
+  };
+
+  return (
+    <div
+      onClick={open}
+      onTouchEnd={(e) => e.stopPropagation()}
+      style={{ flexShrink: 0, cursor: 'pointer', position: 'relative' }}
+    >
+      <input
+        ref={ref}
+        type="date"
+        value={iso || ''}
+        onChange={(e) => onPick(e.target.value || null)}
+        style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
+      />
+      <span className="mono" style={{ display: 'block', fontSize: '11px', padding: '3px 8px', borderRadius: '999px', background: tone.bg, color: tone.fg, whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
 function CopyDateButton({ disabled, onPick }) {
   return (
     <div style={{ position: 'relative', width: '32px', height: '32px', flexShrink: 0 }}>
@@ -268,15 +301,19 @@ function SubtaskList({ subtasks, onToggle, onRemove, draft, onDraftChange, onAdd
   );
 }
 
-function TaskDetailModal({ task, subDraft, onSubDraftChange, onClose, onChange, onDelete, onToggleSubtask, onRemoveSubtask, onAddSubtask }) {
+function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onSave, onChange, onDelete, onToggleSubtask, onRemoveSubtask, onAddSubtask }) {
   const notesRef = useRef(null);
+  const titleRef = useRef(null);
 
   useEffect(() => {
     if (notesRef.current) {
       notesRef.current.style.height = 'auto';
       notesRef.current.style.height = notesRef.current.scrollHeight + 'px';
     }
-  }, [task?.id]);
+    if (isNew && titleRef.current) {
+      titleRef.current.focus();
+    }
+  }, [task?.id, isNew]);
 
   if (!task) return null;
 
@@ -296,8 +333,10 @@ function TaskDetailModal({ task, subDraft, onSubDraftChange, onClose, onChange, 
         <div style={{ width: '36px', height: '4px', background: '#D9D5C7', borderRadius: '2px', margin: '0 auto 18px' }} />
 
         <input
+          ref={titleRef}
           value={task.text}
           onChange={(e) => onChange({ text: e.target.value })}
+          onKeyDown={(e) => { if (e.key === 'Enter' && isNew) onSave(); }}
           placeholder="할 일 제목"
           style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '19px', fontWeight: 600, color: '#232323', marginBottom: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }}
         />
@@ -323,23 +362,25 @@ function TaskDetailModal({ task, subDraft, onSubDraftChange, onClose, onChange, 
           시작날짜와 종료날짜를 다르게 설정하면 그 사이 모든 날에 표시됩니다
         </div>
 
-        <div style={{ marginBottom: '20px' }}>
-          <div className="mono" style={{ fontSize: '11px', color: '#8B8780', marginBottom: '8px', letterSpacing: '0.06em' }}>
-            하위 할 일
+        {!isNew && (
+          <div style={{ marginBottom: '20px' }}>
+            <div className="mono" style={{ fontSize: '11px', color: '#8B8780', marginBottom: '8px', letterSpacing: '0.06em' }}>
+              하위 할 일
+            </div>
+            <SubtaskList
+              subtasks={task.subtasks}
+              onToggle={onToggleSubtask}
+              onRemove={onRemoveSubtask}
+              draft={subDraft}
+              onDraftChange={onSubDraftChange}
+              onAdd={onAddSubtask}
+            />
           </div>
-          <SubtaskList
-            subtasks={task.subtasks}
-            onToggle={onToggleSubtask}
-            onRemove={onRemoveSubtask}
-            draft={subDraft}
-            onDraftChange={onSubDraftChange}
-            onAdd={onAddSubtask}
-          />
-        </div>
+        )}
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
-            onClick={onClose}
+            onClick={isNew ? onSave : onClose}
             className="mono"
             style={{
               flex: 1, padding: '12px', borderRadius: '999px', border: 'none',
@@ -347,15 +388,25 @@ function TaskDetailModal({ task, subDraft, onSubDraftChange, onClose, onChange, 
               fontSize: '13px', cursor: 'pointer',
             }}
           >
-            세부내용 작성완료
+            {isNew ? '추가하기' : '세부내용 작성완료'}
           </button>
-          <button
-            onClick={onDelete}
-            style={{ padding: '0 14px', borderRadius: '999px', border: '1px solid #E3B8A8', background: 'transparent', color: '#B5562F', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-            aria-label="할 일 삭제"
-          >
-            <Trash2 size={16} />
-          </button>
+          {isNew ? (
+            <button
+              onClick={onClose}
+              className="mono"
+              style={{ padding: '0 16px', borderRadius: '999px', border: '1px solid #D9D5C7', background: 'transparent', color: '#8B8780', fontSize: '13px', cursor: 'pointer' }}
+            >
+              취소
+            </button>
+          ) : (
+            <button
+              onClick={onDelete}
+              style={{ padding: '0 14px', borderRadius: '999px', border: '1px solid #E3B8A8', background: 'transparent', color: '#B5562F', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              aria-label="할 일 삭제"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -363,7 +414,6 @@ function TaskDetailModal({ task, subDraft, onSubDraftChange, onClose, onChange, 
 }
 
 export default function TodayTasks() {
-  const [tasks, setTasks] = useState(initialTasks);
   const [draft, setDraft] = useState('');
   const [subDrafts, setSubDrafts] = useState({});
   const [viewMode, setViewMode] = useState('date');
@@ -373,6 +423,10 @@ export default function TodayTasks() {
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [modalSubDraft, setModalSubDraft] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [newTaskDraft, setNewTaskDraft] = useState(null);
+
+  const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
+  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask } = useTasks(accessToken);
 
   const pressTimerRef = useRef(null);
   const longPressFiredRef = useRef(false);
@@ -500,42 +554,73 @@ export default function TodayTasks() {
   const copySelectedTo = (targetIso) => {
     const toCopy = tasks.filter((t) => selectedIds.has(t.id));
     if (toCopy.length === 0) return;
-    const copies = toCopy.map((t) => ({
-      id: newId(), text: t.text, done: false, dueDate: targetIso, date: null, notes: t.notes, expanded: false,
-      subtasks: t.subtasks.map((s) => ({ id: newId(), text: s.text, done: false })),
-    }));
-    setTasks((prev) => [...prev, ...copies]);
+    toCopy.forEach((t) => apiAddTask(t.text, targetIso));
     setSelectedIds(new Set());
     setSelectedDate(targetIso);
     setViewMode('date');
-  };
-
-  const updateTask = (id, patch) => setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-  const toggleTask = (id) => updateTask(id, { done: !tasks.find((t) => t.id === id).done });
-  const removeTask = (id) => setTasks((prev) => prev.filter((t) => t.id !== id));
-  const toggleExpand = (id) => updateTask(id, { expanded: !tasks.find((t) => t.id === id).expanded });
-
-  const toggleSubtask = (taskId, subId) =>
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, subtasks: t.subtasks.map((s) => (s.id === subId ? { ...s, done: !s.done } : s)) } : t)));
-
-  const removeSubtask = (taskId, subId) =>
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subId) } : t)));
-
-  const addSubtask = (taskId, text) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, subtasks: [...t.subtasks, { id: newId(), text: trimmed, done: false }] } : t)));
   };
 
   const addTask = () => {
     const text = draft.trim();
     if (!text) return;
     const newDue = viewMode === 'date' ? selectedDate : null;
-    setTasks((prev) => [...prev, { id: newId(), text, done: false, dueDate: newDue, date: null, notes: '', expanded: false, subtasks: [] }]);
+    apiAddTask(text, newDue);
     setDraft('');
   };
 
+  const openNewTask = () => {
+    setNewTaskDraft({
+      id: '__new__',
+      text: draft.trim(),
+      notes: '',
+      dueDate: viewMode === 'date' ? selectedDate : null,
+      date: null,
+      subtasks: [],
+    });
+    setDraft('');
+  };
+
+  const saveNewTask = () => {
+    if (newTaskDraft?.text?.trim()) {
+      apiAddTask(newTaskDraft.text.trim(), newTaskDraft.dueDate, { notes: newTaskDraft.notes });
+    }
+    setNewTaskDraft(null);
+  };
+
   const closeModal = () => { setEditingTaskId(null); setModalSubDraft(''); };
+
+  if (isSilentTrying || loading) {
+    return <div style={{ minHeight: '100vh', background: '#F6F4ED' }} />;
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#F6F4ED', fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');`}</style>
+        <div className="mono" style={{ fontSize: '26px', fontWeight: 600, color: '#232323', marginBottom: '8px', letterSpacing: '-0.02em' }}>TodayTasks</div>
+        <div style={{ fontSize: '13px', color: '#A8A29A', marginBottom: '48px' }}>오늘 할 일을 Google Tasks와 함께 관리하세요</div>
+        <button
+          onClick={signIn}
+          disabled={!isReady}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '13px 28px', borderRadius: '999px',
+            border: '1px solid #D9D5C7', background: '#FFFFFF',
+            fontSize: '15px', color: '#232323', cursor: isReady ? 'pointer' : 'default',
+            opacity: isReady ? 1 : 0.4, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18">
+            <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+            <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+            <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/>
+            <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
+          </svg>
+          Google로 로그인
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -561,8 +646,13 @@ export default function TodayTasks() {
       `}</style>
 
       <div className="sans" style={{ width: '100%', maxWidth: '380px' }}>
+        {isOffline && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', marginBottom: '10px', borderRadius: '10px', background: '#EDE8DC', color: '#6B6862', fontSize: '12px' }}>
+            <span>●</span> 오프라인 — 저장된 데이터를 표시 중
+          </div>
+        )}
         {/* Date selector / selection action row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: calendarOpen ? '12px' : '8px', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '6px' }}>
           <button onClick={openCalendar} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', color: '#232323', minWidth: 0 }}>
             <CalendarIcon size={16} color="#5C7A5C" style={{ flexShrink: 0 }} />
             <span style={{ fontSize: '19px', fontWeight: 600, whiteSpace: 'nowrap' }}>{dateLabel()} 할 일</span>
@@ -597,6 +687,14 @@ export default function TodayTasks() {
                 전체
               </button>
             )}
+            <button
+              onClick={signOut}
+              className="mono"
+              title="로그아웃"
+              style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '10px', background: 'transparent', color: '#C0B9B0', border: '1px solid #E3E0D5', cursor: 'pointer' }}
+            >
+              로그아웃
+            </button>
           </div>
         </div>
 
@@ -604,18 +702,6 @@ export default function TodayTasks() {
           <div className="mono" style={{ fontSize: '10px', color: '#A8A29A', marginBottom: '14px', marginTop: '-4px' }}>
             할 일을 길게 눌러 선택하고, 복사 아이콘으로 날짜를 고르면 그대로 복사됩니다
           </div>
-        )}
-
-        {calendarOpen && (
-          <MonthCalendar
-            monthDate={calendarMonth}
-            selectedDate={selectedDate}
-            tasks={tasks}
-            onSelect={selectFromCalendar}
-            onPrevMonth={() => setCalendarMonth((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}
-            onNextMonth={() => setCalendarMonth((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}
-            onToday={jumpToday}
-          />
         )}
 
         {/* Progress */}
@@ -694,9 +780,12 @@ export default function TodayTasks() {
                   </div>
 
                   {dateLabelText && (
-                    <span className="mono" style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '999px', background: tone.bg, color: tone.fg, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {dateLabelText}
-                    </span>
+                    <DateChip
+                      iso={t.dueDate}
+                      tone={tone}
+                      label={dateLabelText}
+                      onPick={(v) => updateTask(t.id, { dueDate: v })}
+                    />
                   )}
 
                   <button
@@ -744,7 +833,7 @@ export default function TodayTasks() {
             style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', color: '#232323', fontFamily: 'Inter, system-ui, sans-serif' }}
           />
           <button
-            onClick={addTask}
+            onClick={openNewTask}
             style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: '#232323', color: '#F6F4ED', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             aria-label="추가"
           >
@@ -753,13 +842,41 @@ export default function TodayTasks() {
         </div>
       </div>
 
+      {calendarOpen && (
+        <div
+          onClick={() => setCalendarOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(35,35,35,0.38)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 40 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="sheet-rise sans"
+            style={{ width: '100%', maxWidth: '480px', background: '#F6F4ED', borderRadius: '20px 20px 0 0', padding: '10px 20px 32px', boxSizing: 'border-box' }}
+          >
+            <div style={{ width: '36px', height: '4px', background: '#D9D5C7', borderRadius: '2px', margin: '0 auto 12px' }} />
+            <MonthCalendar
+              monthDate={calendarMonth}
+              selectedDate={selectedDate}
+              tasks={tasks}
+              onSelect={selectFromCalendar}
+              onPrevMonth={() => setCalendarMonth((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}
+              onNextMonth={() => setCalendarMonth((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}
+              onToday={jumpToday}
+            />
+          </div>
+        </div>
+      )}
+
       <TaskDetailModal
-        task={editingTask}
+        task={editingTask ?? newTaskDraft}
+        isNew={!!newTaskDraft && !editingTask}
         subDraft={modalSubDraft}
         onSubDraftChange={setModalSubDraft}
-        onClose={closeModal}
-        onChange={(patch) => updateTask(editingTaskId, patch)}
-        onDelete={() => { removeTask(editingTaskId); closeModal(); }}
+        onClose={editingTask ? closeModal : () => setNewTaskDraft(null)}
+        onSave={editingTask ? closeModal : saveNewTask}
+        onChange={editingTask
+          ? (patch) => updateTask(editingTaskId, patch)
+          : (patch) => setNewTaskDraft((prev) => ({ ...prev, ...patch }))}
+        onDelete={editingTask ? () => { removeTask(editingTaskId); closeModal(); } : null}
         onToggleSubtask={(subId) => toggleSubtask(editingTaskId, subId)}
         onRemoveSubtask={(subId) => removeSubtask(editingTaskId, subId)}
         onAddSubtask={() => { addSubtask(editingTaskId, modalSubDraft); setModalSubDraft(''); }}
