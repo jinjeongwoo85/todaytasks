@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useTasks } from './hooks/useTasks';
 import {
@@ -498,9 +498,6 @@ export default function TodayTasks() {
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
   const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, copyTask } = useTasks(accessToken);
 
-  // true가 되는 시점이 containerRef가 실제 div에 연결되는 시점
-  const mainViewVisible = isSignedIn && !isSilentTrying && !loading;
-
   const pressTimerRef = useRef(null);
   const longPressFiredRef = useRef(false);
   const pressStartPosRef = useRef({ x: 0, y: 0 });
@@ -508,6 +505,7 @@ export default function TodayTasks() {
   const swipeStartRef = useRef({ x: 0, y: 0 });
   const swipeActiveRef = useRef(false);
   const containerRef = useRef(null);
+  const swipeCleanupRef = useRef(null);
   const taskRowRefs = useRef({});
   const latestStateRef = useRef({});
   const swipeHandlersRef = useRef({});
@@ -726,8 +724,13 @@ export default function TodayTasks() {
 
   swipeHandlersRef.current = { start: handleSwipeStart, move: handleSwipeMove, end: handleSwipeEnd };
 
-  useEffect(() => {
-    const el = containerRef.current;
+  // callback ref: React가 DOM 요소가 마운트/언마운트될 때 직접 호출 → useEffect 타이밍 문제 없음
+  const containerRefCallback = useCallback((el) => {
+    if (swipeCleanupRef.current) {
+      swipeCleanupRef.current();
+      swipeCleanupRef.current = null;
+    }
+    containerRef.current = el;
     if (!el) return;
     const onStart = (e) => swipeHandlersRef.current.start(e);
     const onMove = (e) => swipeHandlersRef.current.move(e);
@@ -735,12 +738,12 @@ export default function TodayTasks() {
     el.addEventListener('touchstart', onStart, { passive: false });
     el.addEventListener('touchmove', onMove, { passive: false });
     el.addEventListener('touchend', onEnd);
-    return () => {
+    swipeCleanupRef.current = () => {
       el.removeEventListener('touchstart', onStart);
       el.removeEventListener('touchmove', onMove);
       el.removeEventListener('touchend', onEnd);
     };
-  }, [mainViewVisible]); // [] 아님 — 첫 마운트 시 containerRef가 null이므로 메인 화면 표시 시점에 재실행
+  }, []);
 
   const handleTextClick = (id) => {
     if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
@@ -830,7 +833,7 @@ export default function TodayTasks() {
 
   return (
     <div
-      ref={containerRef}
+      ref={containerRefCallback}
       style={{ background: '#F6F4ED', minHeight: '100vh', display: 'flex', justifyContent: 'center' }}
     >
       <style>{`
