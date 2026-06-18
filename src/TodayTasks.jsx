@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useTasks } from './hooks/useTasks';
-import { C, LONG_PRESS_MS, PRESS_MOVE_TOLERANCE, SWIPE_THRESHOLD } from './styles/tokens';
+import { useTaskListGestures } from './hooks/useTaskListGestures';
+import { C } from './styles/tokens';
 import { toISO, todayISO, tomorrowISO, formatDate, isTaskOnDate, monthStartOf } from './utils/date';
 import Header from './components/Header';
 import TaskList from './components/TaskList';
@@ -29,22 +30,11 @@ export default function TodayTasks() {
     try { return JSON.parse(localStorage.getItem('todaytasks_order') || '[]'); } catch { return []; }
   });
   const [subtaskOrders, setSubtaskOrders] = useState({});
-  const [dragInfo, setDragInfo] = useState(null);
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
   const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, copyTask } = useTasks(accessToken);
 
-  const pressTimerRef = useRef(null);
-  const longPressFiredRef = useRef(false);
-  const pressStartPosRef = useRef({ x: 0, y: 0 });
-  const pressedIdRef = useRef(null);
-  const swipeStartRef = useRef({ x: 0, y: 0 });
-  const swipeActiveRef = useRef(false);
-  const containerRef = useRef(null);
-  const swipeCleanupRef = useRef(null);
-  const taskRowRefs = useRef({});
   const latestStateRef = useRef({});
-  const swipeHandlersRef = useRef({});
   const backEntryPushedRef = useRef(false);
 
   // anyLayerOpen is a boolean primitive — safe as useEffect dependency
@@ -120,154 +110,33 @@ export default function TodayTasks() {
     });
   };
 
-  const startPress = (id, e) => {
-    longPressFiredRef.current = false;
-    pressedIdRef.current = null;
-    const point = e.touches ? e.touches[0] : e;
-    pressStartPosRef.current = { x: point.clientX, y: point.clientY };
-    pressTimerRef.current = setTimeout(() => {
-      longPressFiredRef.current = true;
-      pressedIdRef.current = id;
-    }, LONG_PRESS_MS);
-  };
-  const cancelPress = () => {
-    if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
-  };
-  const handlePressEnd = (id) => {
-    cancelPress();
-    if (dragInfo) return;
-    if (longPressFiredRef.current && pressedIdRef.current) {
-      toggleSelect(pressedIdRef.current);
-      longPressFiredRef.current = false;
-      pressedIdRef.current = null;
-    }
-  };
-  const handlePressMove = (e) => {
-    const point = e.touches ? e.touches[0] : e;
-    const dx = point.clientX - pressStartPosRef.current.x;
-    const dy = point.clientY - pressStartPosRef.current.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (!longPressFiredRef.current) {
-      if (dist > PRESS_MOVE_TOLERANCE) cancelPress();
-    } else if (pressedIdRef.current && !dragInfo && Math.abs(dy) > 5 && Math.abs(dy) > Math.abs(dx)) {
-      const orderedVisible = getOrderedTasks();
-      const idx = orderedVisible.findIndex((t) => t.id === pressedIdRef.current);
-      setDragInfo({ id: pressedIdRef.current, startY: point.clientY, currentY: point.clientY, originalIndex: idx });
-      pressedIdRef.current = null;
-    }
-  };
-
   const shiftSelectedDate = (days) => {
     const d = new Date(selectedDate + 'T00:00:00');
     d.setDate(d.getDate() + days);
     setSelectedDate(toISO(d));
   };
 
-  const updateDragY = (clientY) => {
-    if (!dragInfo) return;
-    setDragInfo((prev) => prev ? { ...prev, currentY: clientY } : null);
-  };
-
-  const computeDropIndex = (clientY) => {
-    const rows = visibleTasks.map((t) => {
-      const el = taskRowRefs.current[t.id];
-      if (!el) return null;
-      const rect = el.getBoundingClientRect();
-      return { id: t.id, midY: rect.top + rect.height / 2 };
-    }).filter(Boolean);
-    let idx = rows.length;
-    for (let i = 0; i < rows.length; i++) {
-      if (clientY < rows[i].midY) { idx = i; break; }
-    }
-    return idx;
-  };
-
-  const commitDrag = (clientY) => {
-    if (!dragInfo) return;
-    const fromIdx = dragInfo.originalIndex;
-    const toIdx = computeDropIndex(clientY);
-    if (fromIdx !== toIdx && toIdx !== fromIdx + 1) {
-      const newOrder = visibleTasks.map((t) => t.id);
-      const [moved] = newOrder.splice(fromIdx, 1);
-      const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
-      newOrder.splice(insertAt, 0, moved);
-      setTaskOrder(newOrder);
-      try { localStorage.setItem('todaytasks_order', JSON.stringify(newOrder)); } catch {}
-    }
-    setDragInfo(null);
-  };
-
   const reorderSubtasks = (taskId, newIds) => {
     setSubtaskOrders((prev) => ({ ...prev, [taskId]: newIds }));
   };
 
-  // Swipe is tracked via non-passive listeners registered once on mount.
-  // swipeHandlersRef.current is updated every render so handlers always see fresh state.
-  const handleSwipeStart = (e) => {
-    if (!e.touches || e.touches.length !== 1) { swipeActiveRef.current = false; return; }
-    const point = e.touches[0];
-    swipeStartRef.current = { x: point.clientX, y: point.clientY };
-    swipeActiveRef.current = true;
-  };
-  const handleSwipeMove = (e) => {
-    if (!e.touches || e.touches.length !== 1) return;
-    const point = e.touches[0];
-    if (dragInfo) {
-      e.preventDefault();
-      updateDragY(point.clientY);
-      return;
-    }
-    if (!swipeActiveRef.current) return;
-    const dx = point.clientX - swipeStartRef.current.x;
-    const dy = point.clientY - swipeStartRef.current.y;
-    if (Math.sqrt(dx * dx + dy * dy) > PRESS_MOVE_TOLERANCE) cancelPress();
-    if (Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > PRESS_MOVE_TOLERANCE) {
-      e.preventDefault();
-    }
-  };
-  const handleSwipeEnd = (e) => {
-    if (dragInfo) {
-      const point = e.changedTouches && e.changedTouches[0];
-      if (point) commitDrag(point.clientY);
-      return;
-    }
-    if (!swipeActiveRef.current) return;
-    swipeActiveRef.current = false;
-    if (viewMode !== 'date' || calendarOpen || editingTaskId !== null || selectedIds.size > 0) return;
-    const point = e.changedTouches && e.changedTouches[0];
-    if (!point) return;
-    const dx = point.clientX - swipeStartRef.current.x;
-    const dy = point.clientY - swipeStartRef.current.y;
-    if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      shiftSelectedDate(dx < 0 ? 1 : -1);
-    }
-  };
-
-  swipeHandlersRef.current = { start: handleSwipeStart, move: handleSwipeMove, end: handleSwipeEnd };
-
-  // callback ref: React가 DOM 요소가 마운트/언마운트될 때 직접 호출 → useEffect 타이밍 문제 없음
-  const containerRefCallback = useCallback((el) => {
-    if (swipeCleanupRef.current) {
-      swipeCleanupRef.current();
-      swipeCleanupRef.current = null;
-    }
-    containerRef.current = el;
-    if (!el) return;
-    const onStart = (e) => swipeHandlersRef.current.start(e);
-    const onMove = (e) => swipeHandlersRef.current.move(e);
-    const onEnd = (e) => swipeHandlersRef.current.end(e);
-    el.addEventListener('touchstart', onStart, { passive: false });
-    el.addEventListener('touchmove', onMove, { passive: false });
-    el.addEventListener('touchend', onEnd);
-    swipeCleanupRef.current = () => {
-      el.removeEventListener('touchstart', onStart);
-      el.removeEventListener('touchmove', onMove);
-      el.removeEventListener('touchend', onEnd);
-    };
-  }, []);
+  // 메인 리스트 제스처(스와이프·롱프레스 다중선택·드래그 정렬)를 단일 native 리스너 경로로 통합.
+  // 스와이프는 날짜뷰이고 시트/모달/선택모드가 아닐 때만 허용(기존 가드 동일).
+  const swipeEnabled = viewMode === 'date' && !calendarOpen && editingTaskId === null && selectedIds.size === 0;
+  const gestures = useTaskListGestures({
+    visibleTasks,
+    swipeEnabled,
+    onToggleSelect: toggleSelect,
+    onShiftDate: shiftSelectedDate,
+    onReorder: (newOrder) => {
+      setTaskOrder(newOrder);
+      try { localStorage.setItem('todaytasks_order', JSON.stringify(newOrder)); } catch {}
+    },
+  });
 
   const handleTextClick = (id) => {
-    if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
+    // 롱프레스 직후 따라오는 click은 무시(드래그/선택과 탭 충돌 방지)
+    if (gestures.longPressFiredRef.current) { gestures.longPressFiredRef.current = false; return; }
     if (selectedIds.size > 0) {
       toggleSelect(id);
     } else {
@@ -319,14 +188,10 @@ export default function TodayTasks() {
 
   const closeModal = () => { setEditingTaskId(null); setModalSubDraft(''); };
 
-  // 할 일 행에 전달할 핸들러 묶음 (제스처·상태는 모두 여기 부모 소유)
+  // 할 일 행에 전달할 (터치가 아닌) 클릭/콜백 핸들러 묶음. 제스처는 컨테이너 hook이 전담.
   const rowHandlers = {
     onToggleTask: toggleTask,
     onTextClick: handleTextClick,
-    onStartPress: startPress,
-    onPressEnd: handlePressEnd,
-    onPressMove: handlePressMove,
-    onCancelPress: cancelPress,
     onOpenDateChip: (t) => setDatePickerTask({ id: t.id, iso: t.dueDate }),
     onToggleExpand: toggleExpand,
     onSubDraftChange: (id, v) => setSubDrafts((prev) => ({ ...prev, [id]: v })),
@@ -344,12 +209,10 @@ export default function TodayTasks() {
     return <LoginScreen onSignIn={signIn} isReady={isReady} />;
   }
 
-  const dropIndex = dragInfo ? computeDropIndex(dragInfo.currentY) : -1;
-
   return (
     <div
-      ref={containerRefCallback}
-      style={{ background: C.bg, minHeight: '100vh', display: 'flex', justifyContent: 'center' }}
+      ref={gestures.containerRef}
+      style={{ background: C.bg, minHeight: '100vh', display: 'flex', justifyContent: 'center', touchAction: 'pan-y' }}
     >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
@@ -391,10 +254,9 @@ export default function TodayTasks() {
         <TaskList
           tasks={visibleTasks}
           viewMode={viewMode}
-          dragInfo={dragInfo}
-          dropIndex={dropIndex}
+          dragInfo={gestures.dragInfo}
+          dropIndex={gestures.dropIndex}
           selectedIds={selectedIds}
-          onRowRef={(id, el) => { taskRowRefs.current[id] = el; }}
           subDrafts={subDrafts}
           subtaskOrders={subtaskOrders}
           rowHandlers={rowHandlers}

@@ -1,89 +1,23 @@
-// 하위 할 일 목록 — 토글/삭제/추가 + 롱프레스 세로 드래그 정렬.
-// 드래그 로직은 4단계에서 useReorderDrag 훅으로 추출 예정. 여기선 이동 + 토큰화만.
-import { useState, useRef } from 'react';
+// 하위 할 일 목록 — 토글/삭제/추가 + 롱프레스 세로 드래그 정렬(useReorderDrag).
 import { Plus, Check, X, CornerDownRight } from 'lucide-react';
-import { C, LONG_PRESS_MS, PRESS_MOVE_TOLERANCE } from '../styles/tokens';
+import { C } from '../styles/tokens';
+import { useReorderDrag } from '../hooks/useReorderDrag';
 
 export default function SubtaskList({ subtasks, onToggle, onRemove, draft, onDraftChange, onAdd, compact, onReorder }) {
-  const [subDrag, setSubDrag] = useState(null);
-  const rowRefs = useRef({});
-
-  const startSubDrag = (id, clientY, idx) => {
-    setSubDrag({ id, startY: clientY, currentY: clientY, originalIndex: idx });
-  };
-  const updateSubDrag = (clientY) => {
-    setSubDrag((prev) => prev ? { ...prev, currentY: clientY } : null);
-  };
-  const computeSubDrop = (clientY) => {
-    let idx = subtasks.length;
-    for (let i = 0; i < subtasks.length; i++) {
-      const el = rowRefs.current[subtasks[i].id];
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      if (clientY < rect.top + rect.height / 2) { idx = i; break; }
-    }
-    return idx;
-  };
-  const commitSubDrag = (clientY) => {
-    if (!subDrag) return;
-    const from = subDrag.originalIndex;
-    const to = computeSubDrop(clientY);
-    if (from !== to && to !== from + 1 && onReorder) {
-      const newIds = subtasks.map((s) => s.id);
-      const [moved] = newIds.splice(from, 1);
-      newIds.splice(to > from ? to - 1 : to, 0, moved);
-      onReorder(newIds);
-    }
-    setSubDrag(null);
-  };
-
-  const subPressTimer = useRef(null);
-  const subLongFired = useRef(false);
-  const subPressPos = useRef({ x: 0, y: 0 });
-
-  const startSubPress = (id, idx, e) => {
-    subLongFired.current = false;
-    const pt = e.touches ? e.touches[0] : e;
-    subPressPos.current = { x: pt.clientX, y: pt.clientY };
-    subPressTimer.current = setTimeout(() => {
-      subLongFired.current = true;
-      startSubDrag(id, pt.clientY, idx);
-    }, LONG_PRESS_MS);
-  };
-  const cancelSubPress = () => {
-    if (subPressTimer.current) { clearTimeout(subPressTimer.current); subPressTimer.current = null; }
-  };
-  const moveSubPress = (e) => {
-    const pt = e.touches ? e.touches[0] : e;
-    const dx = pt.clientX - subPressPos.current.x;
-    const dy = pt.clientY - subPressPos.current.y;
-    if (!subDrag && Math.sqrt(dx * dx + dy * dy) > PRESS_MOVE_TOLERANCE) cancelSubPress();
-    if (subDrag) { e.preventDefault(); updateSubDrag(pt.clientY); }
-  };
-  const endSubPress = (e) => {
-    cancelSubPress();
-    if (subDrag) {
-      const pt = e.changedTouches ? e.changedTouches[0] : e;
-      commitSubDrag(pt.clientY);
-    }
-  };
-
-  const dropIndex = subDrag ? computeSubDrop(subDrag.currentY) : -1;
+  const drag = useReorderDrag(subtasks, onReorder);
 
   return (
     <div>
       {subtasks.map((s, idx) => {
-        const isDragging = subDrag && subDrag.id === s.id;
-        const showLineAbove = subDrag && dropIndex === idx;
-        const showLineBelow = subDrag && dropIndex === subtasks.length && idx === subtasks.length - 1;
+        const isDragging = drag.isDragging(s.id);
+        const showLineAbove = drag.dropIndex === idx && drag.dropIndex !== -1;
+        const showLineBelow = drag.dropIndex === subtasks.length && idx === subtasks.length - 1;
         return (
-          <div key={s.id} ref={(el) => { rowRefs.current[s.id] = el; }}>
+          <div key={s.id} ref={drag.setRowRef(s.id)}>
             {showLineAbove && <div style={{ height: '2px', background: C.sage, borderRadius: '1px', margin: '2px 0' }} />}
             <div
               style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: compact ? '5px 0' : '6px 0', opacity: isDragging ? 0.4 : 1 }}
-              onTouchStart={(e) => startSubPress(s.id, idx, e)}
-              onTouchMove={moveSubPress}
-              onTouchEnd={endSubPress}
+              {...drag.handlers(s.id, idx)}
             >
               <button
                 onClick={() => onToggle(s.id)}

@@ -4,7 +4,7 @@ import { C } from '../styles/tokens';
 import TaskRow from './TaskRow';
 
 export default function TaskList({
-  tasks, viewMode, dragInfo, dropIndex, selectedIds, onRowRef,
+  tasks, viewMode, dragInfo, dropIndex, selectedIds,
   subDrafts, subtaskOrders, rowHandlers,
 }) {
   return (
@@ -18,15 +18,10 @@ export default function TaskList({
           showDropLineAbove={!!dragInfo && dropIndex === i}
           showDropLineBelow={!!dragInfo && dropIndex === tasks.length && i === tasks.length - 1}
           showDivider={i < tasks.length - 1}
-          rowRef={(el) => onRowRef(t.id, el)}
           subDraft={subDrafts[t.id] || ''}
           subtaskOrder={subtaskOrders[t.id]}
           onToggleTask={rowHandlers.onToggleTask}
           onTextClick={rowHandlers.onTextClick}
-          onStartPress={rowHandlers.onStartPress}
-          onPressEnd={rowHandlers.onPressEnd}
-          onPressMove={rowHandlers.onPressMove}
-          onCancelPress={rowHandlers.onCancelPress}
           onOpenDateChip={rowHandlers.onOpenDateChip}
           onToggleExpand={rowHandlers.onToggleExpand}
           onSubDraftChange={(v) => rowHandlers.onSubDraftChange(t.id, v)}

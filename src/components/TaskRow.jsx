@@ -15,9 +15,8 @@ function orderSubtasks(subtasks, order) {
 }
 
 export default function TaskRow({
-  task, selected, isDragging, showDropLineAbove, showDropLineBelow, showDivider, rowRef,
-  onToggleTask, onTextClick, onStartPress, onPressEnd, onPressMove, onCancelPress,
-  onOpenDateChip, onToggleExpand,
+  task, selected, isDragging, showDropLineAbove, showDropLineBelow, showDivider,
+  onToggleTask, onTextClick, onOpenDateChip, onToggleExpand,
   subDraft, onSubDraftChange, subtaskOrder, onToggleSubtask, onRemoveSubtask, onAddSubtask, onReorderSubtasks,
 }) {
   const t = task;
@@ -25,8 +24,10 @@ export default function TaskRow({
   const tone = toneStyle(t.dueDate);
   const dateLabelText = rowDateLabel(t);
 
+  // data-task-id: 컨테이너 단일 제스처 hook이 눌린 행을 식별하고 위치를 측정하는 기준.
+  // 터치 이벤트는 더 이상 행에서 직접 처리하지 않는다(버그 A: 이중 경로 제거).
   return (
-    <div ref={rowRef}>
+    <div data-task-id={t.id}>
       {showDropLineAbove && <div style={{ height: '2px', background: C.sage, margin: '0 6px', borderRadius: '1px' }} />}
       <div
         className="task-row"
@@ -54,12 +55,6 @@ export default function TaskRow({
 
         <div
           onClick={() => onTextClick(t.id)}
-          onTouchStart={(e) => onStartPress(t.id, e)}
-          onTouchEnd={() => onPressEnd(t.id)}
-          onTouchMove={onPressMove}
-          onMouseDown={(e) => onStartPress(t.id, e)}
-          onMouseUp={() => onPressEnd(t.id)}
-          onMouseLeave={onCancelPress}
           style={{
             flex: 1, display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
             paddingRight: '10px', boxSizing: 'border-box', cursor: 'pointer', userSelect: 'none',
