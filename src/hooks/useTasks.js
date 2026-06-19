@@ -163,20 +163,45 @@ export function useTasks(accessToken) {
     return () => { cancelled = true; };
   }, [accessToken, refreshCount]);
 
-  const addTask = useCallback(async (text, dueDate, { notes = '' } = {}) => {
+  const addTask = useCallback(async (text, dueDate, { notes = '', subtasks = [] } = {}) => {
     if (!listId) return;
     const oid = newId();
     setTasks((prev) => [...prev, { id: oid, text, done: false, dueDate, date: null, notes, expanded: false, subtasks: [], _listId: listId, _parentId: null }]);
     db.tasks.put({ id: oid, _listId: listId, _parentId: null, text, done: false, dueDate, date: null, notes }).catch(() => {});
 
+    // 하위할일 텍스트만 추출(빈 항목 제외). 새 할일 모달이 draft에 쌓아둔 것.
+    const subTexts = subtasks.map((s) => (s.text || '').trim()).filter(Boolean);
+
     if (!navigator.onLine) {
       db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text, dueDate, notes }, createdAt: Date.now() }).catch(() => {});
+      // 오프라인: 임시 부모 id(oid) 밑으로 하위할일 큐잉 — 큐 재생 시 temp→실제 id 매핑됨(copyTask와 동일).
+      for (const subText of subTexts) {
+        const subOid = newId();
+        setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: subText, done: false }] } : t));
+        db.tasks.put({ id: subOid, _listId: listId, _parentId: oid, text: subText, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
+        db.pendingOps.add({ type: 'addSubtask', payload: { tempId: subOid, taskId: oid, text: subText }, createdAt: Date.now() }).catch(() => {});
+      }
       return;
     }
     try {
       const g = await api.createTask(accessToken, listId, { title: text, due: dueParam(dueDate), notes, status: 'needsAction' });
       setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, id: g.id } : t));
       db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text, done: false, dueDate, date: null, notes })).catch(() => {});
+
+      // 부모 생성 후 각 하위할일을 부모 밑에 생성(copyTask와 동일 패턴).
+      for (const subText of subTexts) {
+        const subOid = newId();
+        setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: subText, done: false }] } : t));
+        db.tasks.put({ id: subOid, _listId: listId, _parentId: g.id, text: subText, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
+        try {
+          const sg = await api.createTask(accessToken, listId, { title: subText, status: 'needsAction' }, { parent: g.id });
+          setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: t.subtasks.map((s) => s.id === subOid ? { ...s, id: sg.id } : s) } : t));
+          db.tasks.delete(subOid).then(() => db.tasks.put({ id: sg.id, _listId: listId, _parentId: g.id, text: subText, done: false, dueDate: null, date: null, notes: '' })).catch(() => {});
+        } catch {
+          setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subOid) } : t));
+          db.tasks.delete(subOid).catch(() => {});
+        }
+      }
     } catch {
       setTasks((prev) => prev.filter((t) => t.id !== oid));
       db.tasks.delete(oid).catch(() => {});

@@ -5,6 +5,7 @@ import { useTasks } from './hooks/useTasks';
 import { useTaskListGestures } from './hooks/useTaskListGestures';
 import { C } from './styles/tokens';
 import { toISO, todayISO, tomorrowISO, formatDate, isTaskOnDate, monthStartOf } from './utils/date';
+import { newId } from './utils/id';
 import Header from './components/Header';
 import TaskList from './components/TaskList';
 import CalendarSheet from './components/CalendarSheet';
@@ -181,9 +182,26 @@ export default function TodayTasks() {
 
   const saveNewTask = () => {
     if (newTaskDraft?.text?.trim()) {
-      apiAddTask(newTaskDraft.text.trim(), newTaskDraft.dueDate, { notes: newTaskDraft.notes });
+      apiAddTask(newTaskDraft.text.trim(), newTaskDraft.dueDate, {
+        notes: newTaskDraft.notes,
+        subtasks: newTaskDraft.subtasks,
+      });
     }
     setNewTaskDraft(null);
+  };
+
+  // 새 할일 모달의 하위할일은 서버 id가 아직 없으므로 draft에만 쌓아두고, 저장 시 함께 생성된다.
+  const addDraftSubtask = () => {
+    const text = modalSubDraft.trim();
+    if (!text) return;
+    setNewTaskDraft((prev) => ({ ...prev, subtasks: [...prev.subtasks, { id: newId(), text, done: false }] }));
+    setModalSubDraft('');
+  };
+  const toggleDraftSubtask = (subId) => {
+    setNewTaskDraft((prev) => ({ ...prev, subtasks: prev.subtasks.map((s) => s.id === subId ? { ...s, done: !s.done } : s) }));
+  };
+  const removeDraftSubtask = (subId) => {
+    setNewTaskDraft((prev) => ({ ...prev, subtasks: prev.subtasks.filter((s) => s.id !== subId) }));
   };
 
   const closeModal = () => { setEditingTaskId(null); setModalSubDraft(''); };
@@ -218,7 +236,7 @@ export default function TodayTasks() {
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
         .mono { font-family: 'IBM Plex Mono', monospace; }
         .sans { font-family: 'Inter', system-ui, sans-serif; }
-        .task-row { transition: opacity 0.2s ease, background 0.15s ease; }
+        .task-row { transition: opacity 0.2s ease, background 0.15s ease; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
         .check-icon { transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), opacity 0.18s ease; }
         .progress-fill { transition: width 0.35s ease; }
         .expand-panel { animation: reveal 0.18s ease; }
@@ -336,9 +354,9 @@ export default function TodayTasks() {
           ? (patch) => updateTask(editingTaskId, patch)
           : (patch) => setNewTaskDraft((prev) => ({ ...prev, ...patch }))}
         onDelete={editingTask ? () => { removeTask(editingTaskId); closeModal(); } : null}
-        onToggleSubtask={(subId) => toggleSubtask(editingTaskId, subId)}
-        onRemoveSubtask={(subId) => removeSubtask(editingTaskId, subId)}
-        onAddSubtask={() => { addSubtask(editingTaskId, modalSubDraft); setModalSubDraft(''); }}
+        onToggleSubtask={editingTask ? (subId) => toggleSubtask(editingTaskId, subId) : toggleDraftSubtask}
+        onRemoveSubtask={editingTask ? (subId) => removeSubtask(editingTaskId, subId) : removeDraftSubtask}
+        onAddSubtask={editingTask ? () => { addSubtask(editingTaskId, modalSubDraft); setModalSubDraft(''); } : addDraftSubtask}
       />
     </div>
   );

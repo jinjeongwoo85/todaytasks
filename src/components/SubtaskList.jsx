@@ -16,7 +16,12 @@ export default function SubtaskList({ subtasks, onToggle, onRemove, draft, onDra
           <div key={s.id} ref={drag.setRowRef(s.id)}>
             {showLineAbove && <div style={{ height: '2px', background: C.sage, borderRadius: '1px', margin: '2px 0' }} />}
             <div
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: compact ? '5px 0' : '6px 0', opacity: isDragging ? 0.4 : 1 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px', padding: compact ? '5px 0' : '6px 0',
+                opacity: isDragging ? 0.4 : 1,
+                // 롱프레스 드래그 정렬과 충돌하는 OS 네이티브 메뉴/텍스트선택 차단(글자 영역).
+                WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none',
+              }}
               {...drag.handlers(s.id, idx)}
             >
               <button

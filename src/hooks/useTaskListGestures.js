@@ -154,6 +154,10 @@ export function useTaskListGestures(opts) {
       setDragInfo((prev) => prev ? { ...prev, currentY: point.clientY, offsetY: point.clientY - prev.startY + scrollAccumRef.current } : null);
       return;
     }
+    // 롱프레스가 걸린 순간부터(드래그 시작 직전 몇 px 포함) 브라우저 overscroll(pull-to-refresh)을
+    // 차단 → "길게 누른 뒤 아래로 드래그" 시 새로고침이 끼어드는 충돌 방지. 평상시(롱프레스 전)
+    // 세로 스크롤·풀투리프레시는 그대로(이 가드가 안 걸림).
+    if (longPressFiredRef.current) e.preventDefault();
     const dx = point.clientX - swipeStartRef.current.x;
     const dy = point.clientY - swipeStartRef.current.y;
     if (Math.sqrt(dx * dx + dy * dy) > PRESS_MOVE_TOLERANCE) cancelPress();

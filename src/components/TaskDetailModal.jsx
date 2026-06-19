@@ -73,21 +73,19 @@ export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChang
           시작날짜와 종료날짜를 다르게 설정하면 그 사이 모든 날에 표시됩니다
         </div>
 
-        {!isNew && (
-          <div style={{ marginBottom: '20px' }}>
-            <div className="mono" style={{ fontSize: '11px', color: C.label, marginBottom: '8px', letterSpacing: '0.06em' }}>
-              하위 할 일
-            </div>
-            <SubtaskList
-              subtasks={task.subtasks}
-              onToggle={onToggleSubtask}
-              onRemove={onRemoveSubtask}
-              draft={subDraft}
-              onDraftChange={onSubDraftChange}
-              onAdd={onAddSubtask}
-            />
+        <div style={{ marginBottom: '20px' }}>
+          <div className="mono" style={{ fontSize: '11px', color: C.label, marginBottom: '8px', letterSpacing: '0.06em' }}>
+            하위 할 일
           </div>
-        )}
+          <SubtaskList
+            subtasks={task.subtasks}
+            onToggle={onToggleSubtask}
+            onRemove={onRemoveSubtask}
+            draft={subDraft}
+            onDraftChange={onSubDraftChange}
+            onAdd={onAddSubtask}
+          />
+        </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
@@ -99,7 +97,7 @@ export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChang
               fontSize: '13px', cursor: 'pointer',
             }}
           >
-            {isNew ? '추가하기' : '세부내용 작성완료'}
+            {isNew ? '추가하기' : '작성완료'}
           </button>
           {isNew ? (
             <button
