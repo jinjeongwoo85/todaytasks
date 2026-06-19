@@ -11,6 +11,7 @@ import TaskList from './components/TaskList';
 import CalendarSheet from './components/CalendarSheet';
 import SettingsSheet from './components/SettingsSheet';
 import TaskDetailModal from './components/TaskDetailModal';
+import ClockTimePicker from './components/ClockTimePicker';
 import LoginScreen from './components/LoginScreen';
 
 export default function TodayTasks() {
@@ -26,6 +27,7 @@ export default function TodayTasks() {
   const [hideCompleted, setHideCompleted] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerTask, setDatePickerTask] = useState(null);
+  const [chipTimeOpen, setChipTimeOpen] = useState(false);
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
@@ -159,8 +161,9 @@ export default function TodayTasks() {
       id: '__new__',
       text: draft.trim(),
       notes: '',
-      dueDate: viewMode === 'date' ? selectedDate : null,
+      dueDate: viewMode === 'date' ? selectedDate : null, // 기본 날짜 = 종료일
       date: null,
+      time: null,
       subtasks: [],
     });
     setDraft('');
@@ -173,6 +176,8 @@ export default function TodayTasks() {
       apiAddTask(newTaskDraft.text.trim(), newTaskDraft.dueDate, {
         notes: newTaskDraft.notes,
         subtasks: newTaskDraft.subtasks,
+        date: newTaskDraft.date,
+        time: newTaskDraft.time,
       });
     }
     setNewTaskDraft(null);
@@ -205,7 +210,7 @@ export default function TodayTasks() {
   const rowHandlers = {
     onToggleTask: toggleTask,
     onTextClick: handleTextClick,
-    onOpenDateChip: (t) => setDatePickerTask({ id: t.id, iso: t.dueDate }),
+    onOpenDateChip: (t) => setDatePickerTask({ id: t.id, iso: t.dueDate, time: t.time }),
     onToggleExpand: toggleExpand,
     onSubDraftChange: (id, v) => setSubDrafts((prev) => ({ ...prev, [id]: v })),
     onToggleSubtask: (id, subId) => toggleSubtask(id, subId),
@@ -312,11 +317,21 @@ export default function TodayTasks() {
 
       {datePickerTask && (
         <CalendarSheet
-          onClose={() => setDatePickerTask(null)}
+          onClose={() => { setDatePickerTask(null); setChipTimeOpen(false); }}
           selectedDate={datePickerTask.iso || ''}
           tasks={tasks}
-          onSelect={(iso) => { updateTask(datePickerTask.id, { dueDate: iso }); setDatePickerTask(null); }}
+          onSelect={(iso) => { updateTask(datePickerTask.id, { dueDate: iso }); setDatePickerTask(null); setChipTimeOpen(false); }}
           initialMonth={monthStartOf(datePickerTask.iso)}
+          time={datePickerTask.time}
+          onOpenTime={() => setChipTimeOpen(true)}
+        />
+      )}
+
+      {chipTimeOpen && datePickerTask && (
+        <ClockTimePicker
+          value={datePickerTask.time}
+          onConfirm={(v) => { updateTask(datePickerTask.id, { time: v }); setDatePickerTask((p) => p && { ...p, time: v }); setChipTimeOpen(false); }}
+          onClose={() => setChipTimeOpen(false)}
         />
       )}
 

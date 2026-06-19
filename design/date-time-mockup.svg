@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 770" font-family="'Inter','Segoe UI',sans-serif">
+  <style>
+    .mono { font-family: 'IBM Plex Mono','Consolas',monospace; }
+  </style>
+
+  <!-- 배경 -->
+  <rect x="0" y="0" width="1040" height="770" fill="#F6F4ED"/>
+
+  <!-- 헤더 -->
+  <rect x="0" y="0" width="1040" height="72" fill="#232323"/>
+  <text x="30" y="34" fill="#F6F4ED" font-size="20" font-weight="700">TodayTasks · 날짜/시각 시각화 초안 (v5)</text>
+  <text x="30" y="55" fill="#C2BEB3" font-size="12" class="mono">종료일 = 기본(→ Google due)   ·   시작일 · 시각 = 세부정보(notes)에 저장</text>
+
+  <!-- ===================== ① 목록 화면 (현재안 유지) ===================== -->
+  <text x="30" y="106" fill="#232323" font-size="14" font-weight="700">① 목록 화면 (현재 디자인 유지 · 한 줄 · 오른쪽 톤 칩)</text>
+  <rect x="30" y="118" width="470" height="240" rx="18" fill="#FAF8F3" stroke="#D9D5C7"/>
+
+  <!-- row1: 종료일만 + 오늘 → "오늘" -->
+  <rect x="46" y="147" width="22" height="22" fill="none" stroke="#A8A29A" stroke-width="1.5"/>
+  <text x="82" y="163" fill="#232323" font-size="15" font-weight="500">장보기</text>
+  <rect x="410" y="147" width="42" height="22" rx="11" fill="#E3EBE0"/>
+  <text x="431" y="162" fill="#4D6B4F" font-size="11" class="mono" text-anchor="middle">오늘</text>
+  <path d="M464 154 l5 4 l-5 4" fill="none" stroke="#A8A29A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="46" y1="193" x2="484" y2="193" stroke="#D9D5C7" stroke-dasharray="1 3"/>
+
+  <!-- row2: 기간 + 종료일≠오늘 → 날짜만 "6.20~6.22" -->
+  <rect x="46" y="217" width="22" height="22" fill="none" stroke="#A8A29A" stroke-width="1.5"/>
+  <text x="82" y="233" fill="#232323" font-size="15" font-weight="500">회의 자료 준비</text>
+  <rect x="372" y="217" width="80" height="22" rx="11" fill="#EDEAE2"/>
+  <text x="412" y="232" fill="#6B6862" font-size="11" class="mono" text-anchor="middle">6.20~6.22</text>
+  <path d="M464 224 l5 4 l-5 4" fill="none" stroke="#A8A29A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="46" y1="263" x2="484" y2="263" stroke="#D9D5C7" stroke-dasharray="1 3"/>
+
+  <!-- row3: 기간 + 종료일=오늘 → "오늘 14:30" -->
+  <rect x="46" y="287" width="22" height="22" fill="none" stroke="#A8A29A" stroke-width="1.5"/>
+  <text x="82" y="303" fill="#232323" font-size="15" font-weight="500">보고서 제출</text>
+  <rect x="372" y="287" width="80" height="22" rx="11" fill="#E3EBE0"/>
+  <text x="412" y="302" fill="#4D6B4F" font-size="11" class="mono" text-anchor="middle">오늘 14:30</text>
+  <path d="M464 294 l5 4 l-5 4" fill="none" stroke="#A8A29A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="30" y="380" fill="#A8A29A" font-size="10" class="mono">라벨: 종료만+오늘→"오늘" · 기간→"6.20~6.22" · 기간+오늘→"오늘 14:30"</text>
+
+  <!-- ===================== ② 상세 바텀시트 ===================== -->
+  <text x="540" y="106" fill="#232323" font-size="14" font-weight="700">② 할일 상세 (바텀시트)</text>
+  <rect x="540" y="118" width="470" height="452" rx="18" fill="#FAF8F3" stroke="#D9D5C7"/>
+  <rect x="755" y="132" width="40" height="4" rx="2" fill="#D9D5C7"/>
+
+  <text x="566" y="172" fill="#232323" font-size="18" font-weight="700">회의 자료 준비</text>
+  <text x="566" y="198" fill="#6B6862" font-size="13">안건 정리 · 슬라이드 초안 초고</text>
+  <line x1="566" y1="214" x2="984" y2="214" stroke="#E3E0D5"/>
+
+  <!-- 라벨을 박스 밖 위로 -->
+  <text x="566" y="246" fill="#8B8780" font-size="11" class="mono">시작일</text>
+  <text x="782" y="246" fill="#8B8780" font-size="11" class="mono">종료일</text>
+
+  <!-- 시작일 박스 (날짜만) -->
+  <rect x="566" y="254" width="202" height="64" rx="12" fill="#FFFFFF" stroke="#D9D5C7"/>
+  <text x="582" y="293" fill="#232323" font-size="16" font-weight="600">6월 20일</text>
+
+  <!-- 종료일 박스 (날짜 + 시계+시각을 같은 크기로 나란히, 24시간 표기) -->
+  <rect x="782" y="254" width="202" height="64" rx="12" fill="#FFFFFF" stroke="#D9D5C7"/>
+  <text x="798" y="292" fill="#232323" font-size="16" font-weight="600">6월 22일</text>
+  <circle cx="893" cy="286" r="7" fill="none" stroke="#6B6862" stroke-width="1.4"/>
+  <line x1="893" y1="286" x2="893" y2="281" stroke="#6B6862" stroke-width="1.4"/>
+  <line x1="893" y1="286" x2="897" y2="288" stroke="#6B6862" stroke-width="1.4"/>
+  <text x="906" y="292" fill="#232323" font-size="16" font-weight="600">14:30</text>
+
+  <text x="566" y="342" fill="#A8A29A" font-size="10" class="mono">시작일·종료일이 상이하면 그 사이의 모든 날에 표시</text>
+
+  <!-- 하위 할 일 -->
+  <text x="566" y="374" fill="#8B8780" font-size="11" class="mono" letter-spacing="0.5">하위 할 일</text>
+  <circle cx="574" cy="396" r="7" fill="none" stroke="#A8A29A" stroke-width="1.4"/>
+  <text x="590" y="401" fill="#232323" font-size="13">슬라이드 템플릿 만들기</text>
+  <circle cx="574" cy="424" r="7" fill="#5C7A5C"/>
+  <path d="M571 424 l2 2 l4 -4" fill="none" stroke="#FFFFFF" stroke-width="1.4"/>
+  <text x="590" y="429" fill="#A8A29A" font-size="13" text-decoration="line-through">데이터 취합</text>
+
+  <!-- 버튼 -->
+  <rect x="566" y="500" width="340" height="42" rx="21" fill="#232323"/>
+  <text x="736" y="526" fill="#F6F4ED" font-size="13" class="mono" text-anchor="middle">작성완료</text>
+  <rect x="918" y="500" width="66" height="42" rx="21" fill="none" stroke="#E3B8A8"/>
+  <path d="M944 514 h12 M946 514 v16 a1 1 0 0 0 1 1 h6 a1 1 0 0 0 1 -1 v-16 M948 511 h4" fill="none" stroke="#B5562F" stroke-width="1.4" stroke-linecap="round"/>
+
+  <!-- ===================== ③ Google 공식 앱 ===================== -->
+  <text x="30" y="610" fill="#232323" font-size="14" font-weight="700">③ Google 공식 Tasks 앱에서 같은 할일을 열면</text>
+  <rect x="30" y="622" width="980" height="124" rx="14" fill="#FAF8F3" stroke="#D9D5C7"/>
+
+  <rect x="53" y="651" width="20" height="20" fill="none" stroke="#A8A29A" stroke-width="1.5"/>
+  <text x="88" y="667" fill="#232323" font-size="15" font-weight="500">회의 자료 준비</text>
+  <text x="88" y="696" fill="#6B6862" font-size="13">안건 정리 · 슬라이드 초안 초고</text>
+  <rect x="296" y="681" width="296" height="22" rx="4" fill="#FBE9E1" stroke="#E3B8A8"/>
+  <text x="306" y="696" fill="#B5562F" font-size="11" class="mono">⟦tt start=2026-06-20 time=14:30⟧</text>
+  <text x="88" y="724" fill="#A8A29A" font-size="11" class="mono">↑ 이 마커가 공식 앱엔 글자로 보입니다 — 우리 앱에선 자동으로 숨기고 시작일·시각으로 표시 (종료일은 Google 날짜로 정상 표시)</text>
+</svg>
