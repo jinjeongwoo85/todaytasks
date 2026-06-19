@@ -94,6 +94,9 @@ async function flushPendingOps(token, listId) {
       } else if (op.type === 'toggleSubtask') {
         await api.patchTask(token, listId, resolve(p.subId), { status: p.done ? 'completed' : 'needsAction' });
 
+      } else if (op.type === 'updateSubtask') {
+        await api.patchTask(token, listId, resolve(p.subId), { title: p.text });
+
       } else if (op.type === 'removeSubtask') {
         const id = resolve(p.subId);
         if (!isTemp(id)) await api.deleteTask(token, listId, id);
@@ -335,6 +338,19 @@ export function useTasks(accessToken) {
     }
   }, [accessToken, listId]);
 
+  const updateSubtask = useCallback((taskId, subId, text) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, subtasks: t.subtasks.map((s) => s.id === subId ? { ...s, text: trimmed } : s) } : t));
+    db.tasks.update(subId, { text: trimmed }).catch(() => {});
+    if (!listId) return;
+    if (!navigator.onLine) {
+      db.pendingOps.add({ type: 'updateSubtask', payload: { subId, text: trimmed }, createdAt: Date.now() }).catch(() => {});
+    } else {
+      api.patchTask(accessToken, listId, subId, { title: trimmed }).catch(() => {});
+    }
+  }, [accessToken, listId]);
+
   const removeSubtask = useCallback((taskId, subId) => {
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subId) } : t));
     db.tasks.delete(subId).catch(() => {});
@@ -442,5 +458,5 @@ export function useTasks(accessToken) {
     }
   }, [accessToken, listId]);
 
-  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
+  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
 }

@@ -29,7 +29,7 @@ export default function TodayTasks() {
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
-  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
+  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
 
   const latestStateRef = useRef({});
   const backEntryPushedRef = useRef(false);
@@ -192,6 +192,9 @@ export default function TodayTasks() {
   const toggleDraftSubtask = (subId) => {
     setNewTaskDraft((prev) => ({ ...prev, subtasks: prev.subtasks.map((s) => s.id === subId ? { ...s, done: !s.done } : s) }));
   };
+  const updateDraftSubtask = (subId, text) => {
+    setNewTaskDraft((prev) => ({ ...prev, subtasks: prev.subtasks.map((s) => s.id === subId ? { ...s, text } : s) }));
+  };
   const removeDraftSubtask = (subId) => {
     setNewTaskDraft((prev) => ({ ...prev, subtasks: prev.subtasks.filter((s) => s.id !== subId) }));
   };
@@ -206,6 +209,7 @@ export default function TodayTasks() {
     onToggleExpand: toggleExpand,
     onSubDraftChange: (id, v) => setSubDrafts((prev) => ({ ...prev, [id]: v })),
     onToggleSubtask: (id, subId) => toggleSubtask(id, subId),
+    onUpdateSubtask: (id, subId, text) => updateSubtask(id, subId, text),
     onRemoveSubtask: (id, subId) => removeSubtask(id, subId),
     onAddSubtask: (id) => { addSubtask(id, subDrafts[id] || ''); setSubDrafts((prev) => ({ ...prev, [id]: '' })); },
     onReorderSubtasks: (id, newIds, movedSubId) => reorderSubtask(id, movedSubId, newIds),
@@ -347,6 +351,7 @@ export default function TodayTasks() {
           : (patch) => setNewTaskDraft((prev) => ({ ...prev, ...patch }))}
         onDelete={editingTask ? () => { removeTask(editingTaskId); closeModal(); } : null}
         onToggleSubtask={editingTask ? (subId) => toggleSubtask(editingTaskId, subId) : toggleDraftSubtask}
+        onUpdateSubtask={editingTask ? (subId, text) => updateSubtask(editingTaskId, subId, text) : updateDraftSubtask}
         onRemoveSubtask={editingTask ? (subId) => removeSubtask(editingTaskId, subId) : removeDraftSubtask}
         onAddSubtask={editingTask ? () => { addSubtask(editingTaskId, modalSubDraft); setModalSubDraft(''); } : addDraftSubtask}
       />
