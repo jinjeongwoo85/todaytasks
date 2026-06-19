@@ -10,21 +10,27 @@
 //   - 눌린 행은 e.target.closest('[data-task-id]')로 식별(행에서 React 터치 props 제거).
 //   - 컨테이너에 touch-action: pan-y 부여(세로 스크롤=브라우저, 가로=앱)는 호출부에서 지정.
 //
+// 드래그 UX(라이브 정렬): 드래그 중인 행은 손가락을 따라 떠오르고(offsetY), 다른 행들은
+// 드롭 위치에 맞춰 실시간으로 밀려난다(TaskList가 dropIndex·height로 계산). 화면 가장자리에
+// 닿으면 자동 스크롤. 롱프레스 진입 순간 햅틱 진동. 드롭 후 짧은 안착 애니메이션(settlingId).
+//
+// 핵심 안정성: 드롭 위치 판정(computeDropIndex)은 "변형되지 않는 바깥 래퍼(data-task-id)"의
+// 실측 위치로만 한다. 밀려나는 효과는 래퍼 안쪽 transform으로만 주므로 측정이 흔들리지 않는다.
+//
 // 불변 조건(보존): 좌→우 -1일 / 우→좌 +1일, 롱프레스 450ms, 10px 이동 시 press 취소.
 //
-// opts: {
-//   visibleTasks,   // 현재 보이는(정렬된) 할일 배열 — 드래그 원본 인덱스/재정렬 계산용
-//   swipeEnabled,   // 스와이프 허용 여부(예: 날짜뷰 + 시트/선택모드 아님)
-//   onToggleSelect, // (id) => void   롱프레스 후 손 뗄 때 다중선택 토글
-//   onShiftDate,    // (days) => void 가로 스와이프로 ±1일
-//   onReorder,      // (newOrderIds) => void 드래그 정렬 확정
-// }
-// 반환: { containerRef(callback ref), dragInfo, dropIndex, longPressFiredRef }
+// opts: { visibleTasks, swipeEnabled, onToggleSelect, onShiftDate, onReorder }
+// 반환: { containerRef, dragInfo, dropIndex, settlingId, longPressFiredRef }
+//   dragInfo = { id, startY, currentY, originalIndex, height, offsetY }
 import { useState, useRef, useCallback } from 'react';
 import { LONG_PRESS_MS, PRESS_MOVE_TOLERANCE, SWIPE_THRESHOLD } from '../styles/tokens';
 
+const EDGE = 75;        // 화면 위/아래 이 안에 들어오면 자동 스크롤
+const AUTOSCROLL_MAX = 12;
+
 export function useTaskListGestures(opts) {
   const [dragInfo, setDragInfo] = useState(null);
+  const [settlingId, setSettlingId] = useState(null);
 
   // 최신 opts/dragInfo를 ref로 노출 → 단 한 번 등록되는 native 리스너가 항상 최신 값을 읽음(stale 방지)
   const optsRef = useRef(opts);
@@ -40,11 +46,29 @@ export function useTaskListGestures(opts) {
   const containerElRef = useRef(null);
   const cleanupRef = useRef(null);
 
+  // 드래그 보조 상태
+  const rafRef = useRef(0);
+  const lastPointYRef = useRef(0);
+  const scrollAccumRef = useRef(0); // 드래그 중 자동스크롤로 이동한 누적량(떠있는 카드 보정)
+  const settleTimerRef = useRef(null);
+
   const cancelPress = () => {
     if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
   };
 
-  // 컨테이너 안의 data-task-id 노드들을 DOM(=화면) 순서로 측정해 드롭 위치 인덱스 계산.
+  const vibrate = (ms) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} }
+  };
+
+  const findRow = (id) => {
+    const el = containerElRef.current;
+    if (!el) return null;
+    const nodes = el.querySelectorAll('[data-task-id]');
+    for (let i = 0; i < nodes.length; i++) if (nodes[i].getAttribute('data-task-id') === id) return nodes[i];
+    return null;
+  };
+
+  // 바깥 래퍼(절대 transform 안 됨)의 실측 위치로 드롭 인덱스 계산 → 측정이 흔들리지 않음.
   const computeDropIndex = (clientY) => {
     const el = containerElRef.current;
     if (!el) return 0;
@@ -57,7 +81,31 @@ export function useTaskListGestures(opts) {
     return idx;
   };
 
+  // ── 자동 스크롤 ─────────────────────────────────────────────
+  const stopAutoScroll = () => { if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; } };
+  const autoScrollTick = () => {
+    rafRef.current = 0;
+    if (!dragInfoRef.current) return;
+    const y = lastPointYRef.current;
+    const h = window.innerHeight;
+    let step = 0;
+    if (y < EDGE) step = -Math.ceil(AUTOSCROLL_MAX * (EDGE - y) / EDGE);
+    else if (y > h - EDGE) step = Math.ceil(AUTOSCROLL_MAX * (y - (h - EDGE)) / EDGE);
+    if (step) {
+      const before = window.scrollY;
+      window.scrollBy(0, step);
+      const actual = window.scrollY - before; // 끝에 닿으면 0
+      if (actual) {
+        scrollAccumRef.current += actual;
+        setDragInfo((prev) => prev ? { ...prev, offsetY: prev.currentY - prev.startY + scrollAccumRef.current } : null);
+      }
+    }
+    rafRef.current = requestAnimationFrame(autoScrollTick);
+  };
+  const startAutoScroll = () => { if (!rafRef.current) rafRef.current = requestAnimationFrame(autoScrollTick); };
+
   const commitDrag = (clientY) => {
+    stopAutoScroll();
     const di = dragInfoRef.current;
     if (!di) return;
     const vis = optsRef.current.visibleTasks;
@@ -71,13 +119,16 @@ export function useTaskListGestures(opts) {
       optsRef.current.onReorder(newOrder);
     }
     setDragInfo(null);
+    // 드롭 후 짧은 안착 애니메이션(.settle): 위치는 즉시 확정되고 scale/그림자만 가라앉음.
+    setSettlingId(di.id);
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => setSettlingId(null), 220);
   };
 
   const onTouchStart = (e) => {
     if (!e.touches || e.touches.length !== 1) { swipeActiveRef.current = false; return; }
     const point = e.touches[0];
     // 하위 할일 영역(자체 드래그 정렬 보유)에서 시작된 터치는 부모 행 누름으로 보지 않는다.
-    // 그렇지 않으면 하위 할일 롱프레스/드래그가 부모 할일 선택·드래그를 동시에 일으킨다.
     const inSubtasks = e.target.closest && e.target.closest('[data-list-subtasks]');
     const rowEl = !inSubtasks && e.target.closest ? e.target.closest('[data-task-id]') : null;
     const id = rowEl ? rowEl.getAttribute('data-task-id') : null;
@@ -89,6 +140,7 @@ export function useTaskListGestures(opts) {
       pressTimerRef.current = setTimeout(() => {
         longPressFiredRef.current = true;
         pressedIdRef.current = id;
+        vibrate(15); // 길게 눌러 선택/드래그 모드 진입 — 햅틱 피드백
       }, LONG_PRESS_MS);
     }
   };
@@ -98,15 +150,23 @@ export function useTaskListGestures(opts) {
     const point = e.touches[0];
     if (dragInfoRef.current) {
       e.preventDefault();
-      setDragInfo((prev) => prev ? { ...prev, currentY: point.clientY } : null);
+      lastPointYRef.current = point.clientY;
+      setDragInfo((prev) => prev ? { ...prev, currentY: point.clientY, offsetY: point.clientY - prev.startY + scrollAccumRef.current } : null);
       return;
     }
     const dx = point.clientX - swipeStartRef.current.x;
     const dy = point.clientY - swipeStartRef.current.y;
     if (Math.sqrt(dx * dx + dy * dy) > PRESS_MOVE_TOLERANCE) cancelPress();
     if (longPressFiredRef.current && pressedIdRef.current && Math.abs(dy) > 5 && Math.abs(dy) > Math.abs(dx)) {
-      const idx = optsRef.current.visibleTasks.findIndex((t) => t.id === pressedIdRef.current);
-      setDragInfo({ id: pressedIdRef.current, startY: point.clientY, currentY: point.clientY, originalIndex: idx });
+      const id = pressedIdRef.current;
+      const idx = optsRef.current.visibleTasks.findIndex((t) => t.id === id);
+      const node = findRow(id);
+      const headerEl = node ? node.querySelector('.task-row') : null;
+      const height = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 56;
+      scrollAccumRef.current = 0;
+      lastPointYRef.current = point.clientY;
+      setDragInfo({ id, startY: point.clientY, currentY: point.clientY, originalIndex: idx, height, offsetY: 0 });
+      startAutoScroll();
       pressedIdRef.current = null;
       return;
     }
@@ -119,7 +179,7 @@ export function useTaskListGestures(opts) {
     cancelPress();
     if (dragInfoRef.current) {
       const point = e.changedTouches && e.changedTouches[0];
-      if (point) commitDrag(point.clientY);
+      commitDrag(point ? point.clientY : lastPointYRef.current);
       return;
     }
     // 롱프레스 후 손 뗌 → 다중선택 토글 (스와이프와 배타)
@@ -127,7 +187,6 @@ export function useTaskListGestures(opts) {
       optsRef.current.onToggleSelect(pressedIdRef.current);
       // longPressFiredRef는 일부러 true로 둔다 → 롱프레스 직후 합성되는 click을
       // handleTextClick이 무시(소비)하게 함. 다음 touchstart에서 false로 리셋됨.
-      // (이걸 여기서 false로 만들면 뒤따르는 click이 선택을 다시 토글해 해제됨)
       pressedIdRef.current = null;
       swipeActiveRef.current = false;
       return;
@@ -159,6 +218,7 @@ export function useTaskListGestures(opts) {
     el.addEventListener('touchmove', onMove, { passive: false });
     el.addEventListener('touchend', onEnd);
     cleanupRef.current = () => {
+      stopAutoScroll();
       el.removeEventListener('touchstart', onStart);
       el.removeEventListener('touchmove', onMove);
       el.removeEventListener('touchend', onEnd);
@@ -167,5 +227,5 @@ export function useTaskListGestures(opts) {
 
   const dropIndex = dragInfo ? computeDropIndex(dragInfo.currentY) : -1;
 
-  return { containerRef, dragInfo, dropIndex, longPressFiredRef };
+  return { containerRef, dragInfo, dropIndex, settlingId, longPressFiredRef };
 }

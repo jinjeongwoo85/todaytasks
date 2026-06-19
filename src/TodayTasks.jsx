@@ -223,10 +223,15 @@ export default function TodayTasks() {
         .progress-fill { transition: width 0.35s ease; }
         .expand-panel { animation: reveal 0.18s ease; }
         .sheet-rise { animation: sheetRise 0.22s ease-out; }
+        .settle { animation: settle 0.2s ease-out; }
         @keyframes reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes sheetRise { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes settle {
+          from { transform: scale(1.03); box-shadow: 0 10px 28px rgba(35,35,35,0.22); }
+          to { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+        }
         @media (prefers-reduced-motion: reduce) {
-          .check-icon, .progress-fill, .task-row, .expand-panel, .sheet-rise { transition: none !important; animation: none !important; }
+          .check-icon, .progress-fill, .task-row, .expand-panel, .sheet-rise, .settle { transition: none !important; animation: none !important; }
         }
       `}</style>
 
@@ -256,6 +261,7 @@ export default function TodayTasks() {
           viewMode={viewMode}
           dragInfo={gestures.dragInfo}
           dropIndex={gestures.dropIndex}
+          settlingId={gestures.settlingId}
           selectedIds={selectedIds}
           subDrafts={subDrafts}
           subtaskOrders={subtaskOrders}
