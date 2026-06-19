@@ -63,7 +63,7 @@ export default function TodayTasks() {
       backEntryPushedRef.current = false;
       const s = latestStateRef.current;
       if (s.editingTaskId !== null) { setEditingTaskId(null); setModalSubDraft(''); return; }
-      if (s.newTaskDraft !== null) { setNewTaskDraft(null); return; }
+      if (s.newTaskDraft !== null) { saveNewTaskRef.current(); return; }
       if (s.settingsOpen) { setSettingsOpen(false); return; }
       if (s.copyPickerOpen) { setCopyPickerOpen(false); return; }
       if (s.datePickerTask) { setDatePickerTask(null); return; }
@@ -180,6 +180,8 @@ export default function TodayTasks() {
     setDraft('');
   };
 
+  // 새 할일 모달을 닫을 때 호출 — 제목이 있으면 저장(하위할일 포함), 없으면 그냥 버린다.
+  // '추가하기' 버튼뿐 아니라 바깥 탭/뒤로가기로 닫아도 동일하게 동작(기존 할일 편집의 자동저장과 통일).
   const saveNewTask = () => {
     if (newTaskDraft?.text?.trim()) {
       apiAddTask(newTaskDraft.text.trim(), newTaskDraft.dueDate, {
@@ -188,7 +190,11 @@ export default function TodayTasks() {
       });
     }
     setNewTaskDraft(null);
+    setModalSubDraft('');
   };
+  // popstate 핸들러는 마운트 시 1회 등록되므로 최신 saveNewTask를 ref로 노출(stale 방지).
+  const saveNewTaskRef = useRef(saveNewTask);
+  saveNewTaskRef.current = saveNewTask;
 
   // 새 할일 모달의 하위할일은 서버 id가 아직 없으므로 draft에만 쌓아두고, 저장 시 함께 생성된다.
   const addDraftSubtask = () => {
@@ -348,7 +354,8 @@ export default function TodayTasks() {
         isNew={!!newTaskDraft && !editingTask}
         subDraft={modalSubDraft}
         onSubDraftChange={setModalSubDraft}
-        onClose={editingTask ? closeModal : () => setNewTaskDraft(null)}
+        onClose={editingTask ? closeModal : saveNewTask}
+        onCancel={() => { setNewTaskDraft(null); setModalSubDraft(''); }}
         onSave={editingTask ? closeModal : saveNewTask}
         onChange={editingTask
           ? (patch) => updateTask(editingTaskId, patch)

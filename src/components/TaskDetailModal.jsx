@@ -9,7 +9,7 @@ import LabeledDateField from './LabeledDateField';
 import SubtaskList from './SubtaskList';
 import CalendarSheet from './CalendarSheet';
 
-export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onSave, onChange, onDelete, onToggleSubtask, onRemoveSubtask, onAddSubtask }) {
+export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onCancel, onSave, onChange, onDelete, onToggleSubtask, onRemoveSubtask, onAddSubtask }) {
   const notesRef = useRef(null);
   const titleRef = useRef(null);
   const [pickerField, setPickerField] = useState(null);
@@ -101,7 +101,7 @@ export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChang
           </button>
           {isNew ? (
             <button
-              onClick={onClose}
+              onClick={onCancel}
               className="mono"
               style={{ padding: '0 16px', borderRadius: '999px', border: `1px solid ${C.border}`, background: 'transparent', color: C.label, fontSize: '13px', cursor: 'pointer' }}
             >
