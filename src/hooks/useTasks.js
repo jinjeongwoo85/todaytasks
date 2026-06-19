@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api/googleTasks';
 import { db, saveTasksToDb, loadTasksFromDb } from '../db/localDB';
+import { encodeNotes, decodeNotes } from '../utils/taskNotes';
 
 const newId = () => `opt-${Date.now()}-${Math.random()}`;
 const isTemp = (id) => id.startsWith('opt-');
@@ -16,13 +17,15 @@ function lastRealId(items) {
 }
 
 function gToLocal(gTask, listId) {
+  const { notes, date, time } = decodeNotes(gTask.notes || ''); // 시작일·시각·깨끗한 메모 분리
   return {
     id: gTask.id,
     text: gTask.title || '',
     done: gTask.status === 'completed',
-    dueDate: gTask.due ? gTask.due.split('T')[0] : null,
-    date: null,
-    notes: gTask.notes || '',
+    dueDate: gTask.due ? gTask.due.split('T')[0] : null, // 종료일 = Google due(네이티브)
+    date,                                                 // 시작일 = notes 마커
+    time,                                                 // 시각  = notes 마커
+    notes,
     expanded: false,
     subtasks: [],
     _listId: listId,
@@ -66,12 +69,13 @@ async function flushPendingOps(token, listId) {
         const g = await api.createTask(token, listId, {
           title: p.text,
           due: dueParam(p.dueDate),
+          notes: encodeNotes(p.notes || '', { date: p.date, time: p.time }), // 시작일·시각 마커
           status: 'needsAction',
         }, { previous: lastTaskId });
         lastTaskId = g.id;
         tempIdMap[p.tempId] = g.id;
         await db.tasks.delete(p.tempId);
-        await db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text: p.text, done: false, dueDate: p.dueDate, date: null, notes: '' });
+        await db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text: p.text, done: false, dueDate: p.dueDate, date: p.date ?? null, time: p.time ?? null, notes: p.notes || '' });
 
       } else if (op.type === 'updateTask') {
         await api.patchTask(token, listId, resolve(p.id), p.gPatch);
@@ -204,18 +208,18 @@ export function useTasks(accessToken) {
     return () => { cancelled = true; };
   }, [accessToken, refreshCount]);
 
-  const addTask = useCallback(async (text, dueDate, { notes = '', subtasks = [] } = {}) => {
+  const addTask = useCallback(async (text, dueDate, { notes = '', subtasks = [], date = null, time = null } = {}) => {
     if (!listId) return;
     const previous = lastRealId(tasksRef.current); // 기존 마지막 할일 뒤(맨 끝)에 삽입
     const oid = newId();
-    setTasks((prev) => [...prev, { id: oid, text, done: false, dueDate, date: null, notes, expanded: false, subtasks: [], _listId: listId, _parentId: null }]);
-    db.tasks.put({ id: oid, _listId: listId, _parentId: null, text, done: false, dueDate, date: null, notes }).catch(() => {});
+    setTasks((prev) => [...prev, { id: oid, text, done: false, dueDate, date, time, notes, expanded: false, subtasks: [], _listId: listId, _parentId: null }]);
+    db.tasks.put({ id: oid, _listId: listId, _parentId: null, text, done: false, dueDate, date, time, notes }).catch(() => {});
 
     // 하위할일 텍스트만 추출(빈 항목 제외). 새 할일 모달이 draft에 쌓아둔 것.
     const subTexts = subtasks.map((s) => (s.text || '').trim()).filter(Boolean);
 
     if (!navigator.onLine) {
-      db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text, dueDate, notes }, createdAt: Date.now() }).catch(() => {});
+      db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text, dueDate, notes, date, time }, createdAt: Date.now() }).catch(() => {});
       // 오프라인: 임시 부모 id(oid) 밑으로 하위할일 큐잉 — 큐 재생 시 temp→실제 id 매핑됨(copyTask와 동일).
       for (const subText of subTexts) {
         const subOid = newId();
@@ -226,9 +230,9 @@ export function useTasks(accessToken) {
       return;
     }
     try {
-      const g = await api.createTask(accessToken, listId, { title: text, due: dueParam(dueDate), notes, status: 'needsAction' }, { previous });
+      const g = await api.createTask(accessToken, listId, { title: text, due: dueParam(dueDate), notes: encodeNotes(notes, { date, time }), status: 'needsAction' }, { previous });
       setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, id: g.id } : t));
-      db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text, done: false, dueDate, date: null, notes })).catch(() => {});
+      db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text, done: false, dueDate, date, time, notes })).catch(() => {});
 
       // 부모 생성 후 각 하위할일을 부모 밑에 순서대로 생성(직전 하위 뒤에 체이닝 → 입력 순서 유지).
       let prevSub;
@@ -253,15 +257,23 @@ export function useTasks(accessToken) {
   }, [accessToken, listId]);
 
   const updateTask = useCallback(async (id, patch) => {
+    // notes/date/time는 한 칸(notes)에 함께 인코딩되므로, 하나만 바뀌어도 "병합된 최신 상태"로
+    // 재인코딩해야 나머지 값이 유실되지 않는다. tasksRef.current는 이번 패치 이전 상태라,
+    // 여기에 patch를 덮어써 최신 전체 상태(merged)를 만든다.
+    const cur = tasksRef.current.find((t) => t.id === id) || {};
+    const merged = { ...cur, ...patch };
+
     setTasks((prev) => prev.map((t) => t.id === id ? { ...t, ...patch } : t));
     db.tasks.update(id, patch).catch(() => {});
     if (!listId) return;
 
     const gPatch = {};
     if ('text' in patch) gPatch.title = patch.text;
-    if ('notes' in patch) gPatch.notes = patch.notes || '';
     if ('done' in patch) gPatch.status = patch.done ? 'completed' : 'needsAction';
     if ('dueDate' in patch) gPatch.due = dueParam(patch.dueDate) ?? null;
+    if ('notes' in patch || 'date' in patch || 'time' in patch) {
+      gPatch.notes = encodeNotes(merged.notes || '', { date: merged.date, time: merged.time });
+    }
     if (Object.keys(gPatch).length === 0) return;
 
     if (!navigator.onLine) {
@@ -410,17 +422,18 @@ export function useTasks(accessToken) {
     if (!listId) return;
     const previous = lastRealId(tasksRef.current); // 복사본도 맨 끝에 삽입
     const oid = newId();
+    const cTime = task.time ?? null; // 시각은 복사본에 유지(종료일은 대상 날짜로 바뀜, 시작일은 단일화)
     setTasks((prev) => [...prev, {
       id: oid, text: task.text, done: false,
-      dueDate: targetDueDate, date: null,
+      dueDate: targetDueDate, date: null, time: cTime,
       notes: task.notes || '',
       expanded: false, subtasks: [],
       _listId: listId, _parentId: null,
     }]);
-    db.tasks.put({ id: oid, _listId: listId, _parentId: null, text: task.text, done: false, dueDate: targetDueDate, date: null, notes: task.notes || '' }).catch(() => {});
+    db.tasks.put({ id: oid, _listId: listId, _parentId: null, text: task.text, done: false, dueDate: targetDueDate, date: null, time: cTime, notes: task.notes || '' }).catch(() => {});
 
     if (!navigator.onLine) {
-      db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text: task.text, dueDate: targetDueDate, notes: task.notes || '' }, createdAt: Date.now() }).catch(() => {});
+      db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text: task.text, dueDate: targetDueDate, notes: task.notes || '', date: null, time: cTime }, createdAt: Date.now() }).catch(() => {});
       for (const sub of task.subtasks) {
         const subOid = newId();
         setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: sub.text, done: false }] } : t));
@@ -432,10 +445,10 @@ export function useTasks(accessToken) {
 
     try {
       const g = await api.createTask(accessToken, listId, {
-        title: task.text, due: dueParam(targetDueDate), notes: task.notes || '', status: 'needsAction',
+        title: task.text, due: dueParam(targetDueDate), notes: encodeNotes(task.notes || '', { date: null, time: cTime }), status: 'needsAction',
       }, { previous });
       setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, id: g.id } : t));
-      db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text: task.text, done: false, dueDate: targetDueDate, date: null, notes: task.notes || '' })).catch(() => {});
+      db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text: task.text, done: false, dueDate: targetDueDate, date: null, time: cTime, notes: task.notes || '' })).catch(() => {});
 
       let prevSub;
       for (const sub of task.subtasks) {

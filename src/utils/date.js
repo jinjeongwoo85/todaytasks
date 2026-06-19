@@ -45,6 +45,9 @@ export const formatShort = (iso) => {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 };
 
+// 'HH:mm'(24시간) 그대로 표시. 시각은 종료일에 종속되는 로컬 표시값(Google엔 notes 마커로만 저장).
+export const formatTime = (hhmm) => hhmm || '';
+
 // dueDate가 과거/오늘/미래/없음인지. today는 매 호출 재계산(기본값)이라 자정 경계에도 정확.
 export const dateTone = (iso, today = todayISO()) => {
   if (!iso) return 'none';
@@ -56,18 +59,30 @@ export const dateTone = (iso, today = todayISO()) => {
 // 톤 키 → 색상 객체
 export const toneStyle = (iso, today = todayISO()) => TONE[dateTone(iso, today)];
 
-// 할일이 특정 날짜에 표시되는가. 시작~종료 범위가 있으면 그 사이 모든 날, 없으면 dueDate 당일.
+// 할일이 특정 날짜에 표시되는가. 시작~종료 범위가 있으면 그 사이 모든 날, 없으면 종료일 당일.
+// 종료일이 없고 시작일만 있는 예외 상태에선 시작일 당일에 표시(날짜 화면에서 사라지는 것 방지).
 export const isTaskOnDate = (t, iso) => {
   if (t.date && t.dueDate && t.date <= t.dueDate) {
     return iso >= t.date && iso <= t.dueDate;
   }
-  return t.dueDate === iso;
+  return (t.dueDate || t.date) === iso;
 };
 
-// 행에 표시할 날짜 라벨. 범위면 '6.16~6.20', 단일이면 '6.16(화)', 없으면 null.
-export const rowDateLabel = (t) => {
-  if (t.date && t.dueDate && t.date <= t.dueDate && t.date !== t.dueDate) {
-    return `${formatShort(t.date)}~${formatShort(t.dueDate)}`;
+// 행에 표시할 날짜 라벨(기본 날짜 = 종료일 기준). 기간은 시작일을 '~'로 대체.
+// 시각은 있으면 항상 뒤에 붙인다(기간/단일 공통).
+//  - 기간(시작≠종료): '~종료일' (종료일=오늘이면 '~오늘').  예) ~6.19 / ~6.19 18:00 / ~오늘 18:00
+//  - 단일 + 종료일=오늘: '오늘'.                            예) 오늘 / 오늘 18:00
+//  - 단일 + 종료일≠오늘: '6.22(화)'.                        예) 6.22(화) / 6.22(화) 18:00
+//  - 종료일 없음: null
+export const rowDateLabel = (t, today = todayISO()) => {
+  const end = t.dueDate;
+  if (!end) return null;
+  const isRange = t.date && t.date !== end && t.date <= end;
+  const time = t.time ? ` ${formatTime(t.time)}` : '';
+  if (isRange) {
+    const endLabel = end === today ? '오늘' : formatShort(end);
+    return `~${endLabel}${time}`;
   }
-  return t.dueDate ? formatDate(t.dueDate) : null;
+  if (end === today) return `오늘${time}`;
+  return `${formatDate(end)}${time}`;
 };

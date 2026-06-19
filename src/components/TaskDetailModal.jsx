@@ -2,17 +2,19 @@
 // 새 할 일 모드(isNew)면 추가/취소, 기존 모드면 완료/삭제.
 // 내부 날짜 picker는 CalendarSheet 재사용(zIndex picker, 백드롭 0.5).
 import { useState, useRef, useEffect } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Clock, X } from 'lucide-react';
 import { C, Z } from '../styles/tokens';
-import { monthStartOf } from '../utils/date';
+import { monthStartOf, toneStyle, formatDate } from '../utils/date';
 import LabeledDateField from './LabeledDateField';
 import SubtaskList from './SubtaskList';
 import CalendarSheet from './CalendarSheet';
+import ClockTimePicker from './ClockTimePicker';
 
 export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onCancel, onSave, onChange, onDelete, onToggleSubtask, onUpdateSubtask, onRemoveSubtask, onAddSubtask }) {
   const notesRef = useRef(null);
   const titleRef = useRef(null);
   const [pickerField, setPickerField] = useState(null);
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
 
   useEffect(() => {
     if (notesRef.current) {
@@ -66,11 +68,17 @@ export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChang
         />
 
         <div style={{ display: 'flex', gap: '10px', marginBottom: '6px' }}>
-          <LabeledDateField label="시작날짜" iso={task.date} onOpen={() => setPickerField('date')} onClear={() => onChange({ date: null })} />
-          <LabeledDateField label="종료날짜" iso={task.dueDate} onOpen={() => setPickerField('dueDate')} onClear={() => onChange({ dueDate: null })} />
+          <LabeledDateField label="시작일" iso={task.date} onOpen={() => setPickerField('date')} onClear={() => onChange({ date: null })} />
+          <EndDateTimeField
+            iso={task.dueDate}
+            time={task.time}
+            onOpenDate={() => setPickerField('dueDate')}
+            onClearDate={() => onChange({ dueDate: null })}
+            onOpenTime={() => setTimePickerOpen(true)}
+          />
         </div>
         <div className="mono" style={{ fontSize: '10px', color: C.mute, marginBottom: '18px' }}>
-          시작날짜와 종료날짜를 다르게 설정하면 그 사이 모든 날에 표시됩니다
+          시작일·종료일이 상이하면 그 사이의 모든 날에 표시
         </div>
 
         <div style={{ marginBottom: '20px' }}>
@@ -129,6 +137,54 @@ export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChang
             zIndex={Z.picker}
             backdrop={0.5}
           />
+        )}
+
+        {timePickerOpen && (
+          <ClockTimePicker
+            value={task.time}
+            onConfirm={(v) => { onChange({ time: v }); setTimePickerOpen(false); }}
+            onClose={() => setTimePickerOpen(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 종료일 + 시각 통합 필드. 날짜(탭→달력)와 시각(탭→원형 시계 다이얼)을 한 박스에 나란히 둔다.
+// 시각은 종료일에 종속(시각만 따로 두지 않음). 표시는 항상 24h.
+function EndDateTimeField({ iso, time, onOpenDate, onClearDate, onOpenTime }) {
+  const tone = toneStyle(iso);
+  return (
+    <div style={{ flex: 1 }}>
+      <div className="mono" style={{ fontSize: '10px', color: C.label, marginBottom: '4px' }}>종료일</div>
+      <div
+        className="mono"
+        style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          fontSize: '13px', padding: '8px', borderRadius: '8px', boxSizing: 'border-box',
+          background: tone.bg, color: iso ? tone.fg : C.mute, border: `1px solid ${iso ? tone.border : C.border}`,
+        }}
+      >
+        <span
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onOpenDate(); }}
+          style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          {iso ? formatDate(iso) : '설정 안함'}
+        </span>
+
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+          <span
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onOpenTime(); }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', opacity: time ? 1 : 0.55, cursor: 'pointer' }}
+          >
+            <Clock size={12} />
+            <span style={{ whiteSpace: 'nowrap' }}>{time || '시간'}</span>
+          </span>
+        </span>
+
+        {iso && (
+          <X size={12} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); e.preventDefault(); onClearDate(); }} />
         )}
       </div>
     </div>

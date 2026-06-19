@@ -18,7 +18,7 @@ export async function saveTasksToDb(listId, tasks) {
   for (const t of tasks) {
     flat.push({
       id: t.id, _listId: listId, _parentId: null,
-      text: t.text, done: t.done, dueDate: t.dueDate, date: t.date, notes: t.notes,
+      text: t.text, done: t.done, dueDate: t.dueDate, date: t.date, time: t.time ?? null, notes: t.notes,
       _position: t._position ?? '',
     });
     for (const s of t.subtasks) {
@@ -54,7 +54,7 @@ export async function loadTasksFromDb() {
 
   const tasks = parents.map((p) => ({
     id: p.id, text: p.text, done: p.done,
-    dueDate: p.dueDate, date: p.date, notes: p.notes,
+    dueDate: p.dueDate, date: p.date, time: p.time ?? null, notes: p.notes,
     expanded: false, _listId: listId, _parentId: null, _position: p._position ?? '',
     subtasks: children
       .filter((c) => c._parentId === p.id)

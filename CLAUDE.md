@@ -88,7 +88,8 @@ vite.config.js            # Vite + PWA 설정
 - **API 연동**: `useTasks` 훅이 로컬 state와 API를 동시에 관리 (optimistic update)
 - **오프라인**: `useTasks`가 IndexedDB(`db/localDB.js`, Dexie)로 fallback — 온라인이면 API, 오프라인이면 로컬 캐시. `isOffline` 플래그로 배너 표시
 - **순서(ordering)**: Google Tasks의 `position`(사전식 문자열)을 단일 출처로 사용. 새 항목은 마지막 실제 형제(`previous`) 뒤에 추가해 생성순서 보존 (`useTasks.js`의 `lastRealId` 주석 참고)
-- **하위 작업(subtasks)**: Google Tasks의 `parent` 필드 활용 — 별도 태스크로 저장됨
+- **시작일·시각의 notes 저장**: Google 공개 API엔 날짜 칸이 `due`(날짜 단위, 시각 버림) 하나뿐 — 별도 시작일/시각/기한 필드 없음(실측 검증함). 그래서 **종료일만 `due`에**, **시작일·시각은 `notes` 끝줄 `⟦tt start=… time=…⟧` 마커**로 저장하고 앱에서 분리(`utils/taskNotes.js`). 트레이드오프: Google 공식 앱 세부정보엔 마커가 글자로 보임. ⚠️ notes엔 3값(메모+시작일+시각)이 한 칸에 뭉쳐 있어, 하나만 바꿔도 **병합된 최신 상태로 재인코딩**해야 나머지가 안 지워짐(`useTasks.updateTask` 참고). 디코드는 관대하게 설계(마커 깨져도 메모 보존)
+- **하위 작업(subtasks)**: Google Tasks의 `parent` 필드 활용 — 별도 태스크로 저장됨. 하위작업은 시작일·시각 마커를 쓰지 않음(상위 작업만)
 - **Google Cloud 프로젝트**: "My First Project" 사용, OAuth 클라이언트 이름 "TodayTasks Web"
 - **OAuth 앱 이름**: 로그인 팝업에 "주간뉴스-260616"으로 표시됨 — OAuth 동의 화면에서 수정 가능 (비기능적 이슈)
 
@@ -117,12 +118,14 @@ TodayTasks (main, all state here)
 
 **Key data shape per task:**
 ```js
-{ id, text, done, dueDate, date, notes, expanded, subtasks: [{ id, text, done }],
+{ id, text, done, dueDate, date, time, notes, expanded, subtasks: [{ id, text, done }],
   _listId, _parentId, _position }   // _접두사 = Google Tasks 동기화용 내부 필드
 ```
-- `date` = start date (optional), `dueDate` = end/due date
-- When both are set and `date < dueDate`, the task appears on every date in that range (`isTaskOnDate`)
-- 모델 변환은 `utils/taskModel.js`(`googleToTask` / `taskToGoogleBody` 등)에 모음
+- `dueDate` = **종료일(기본 날짜)** — Google `due`에 네이티브 저장
+- `date` = 시작일(optional), `time` = 시각 'HH:mm'(종료일에 종속) — **둘 다 Google `notes`에 마커로 저장**
+- 둘 다 있고 `date < dueDate`면 그 사이 모든 날에 표시(`isTaskOnDate`)
+- 행 라벨 규칙은 `rowDateLabel`(`utils/date.js`): 시각은 있으면 항상 뒤에 붙음. 기간은 시작일을 `~`로 대체(`~6.19 18:00`, 종료=오늘이면 `~오늘 18:00`), 단일은 종료=오늘→`오늘`, 그 외→`6.22(화)`(예: `6.22(화) 18:00`)
+- 모델 변환은 `utils/taskModel.js`(`googleToTask` / `taskToGoogleBody`), 마커 인코딩은 `utils/taskNotes.js`. 단, 실제 동기화 경로(매핑/인코딩)는 `hooks/useTasks.js` 인라인에도 있음(둘을 함께 맞춰야 함)
 
 **Design tokens** — 색상·톤·z-index·제스처 상수는 `styles/tokens.js`로 모음:
 - `C` = 색상 팔레트, `Z` = z-index 레이어
