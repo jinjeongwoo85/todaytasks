@@ -39,15 +39,27 @@ VITE_GOOGLE_CLIENT_ID=xxxxxx.apps.googleusercontent.com
 ```
 src/
   main.jsx                # React 앱 진입점
-  TodayTasks.jsx          # 메인 UI 컴포넌트 (모든 UI 상태 여기)
+  TodayTasks.jsx          # 메인 컨테이너 (~360줄) — 모든 UI 상태 + 화면 조립
   hooks/
     useGoogleAuth.js      # Google OAuth 토큰 관리 + localStorage 캐싱
-    useTasks.js           # Google Tasks API CRUD + 로컬 상태 관리
+    useTasks.js           # Tasks API CRUD + 로컬 state + IndexedDB 오프라인 fallback
+    useTaskListGestures.js# 롱프레스·가로스와이프·드래그 제스처
+    useReorderDrag.js     # 하위 작업 순서 변경 드래그
+  components/             # UI 조각들 (Header, TaskList, TaskRow, TaskDetailModal,
+                          #   BottomSheet, CalendarSheet, MonthCalendar, SettingsSheet,
+                          #   SubtaskList, DateChip, LabeledDateField, LoginScreen)
+  utils/
+    date.js               # ISO 변환·날짜 톤·범위 판정(isTaskOnDate) 등
+    taskModel.js          # Google Task ↔ 로컬 모델 변환, API body 빌더
+    id.js                 # 임시 id 생성
+  styles/
+    tokens.js             # 색상(C)·톤(TONE)·z-index(Z)·제스처 상수
   api/
     googleTasks.js        # Google Tasks REST API 호출 함수
-  db/                     # (Phase 5~) localDB.js (Dexie/IndexedDB)
+  db/
+    localDB.js            # Dexie/IndexedDB 오프라인 캐시
 public/
-  icons/                  # (Phase 7~) PWA 아이콘 192x192, 512x512
+  icons/                  # PWA 아이콘 192x192, 512x512
 index.html                # GIS 스크립트 포함 (accounts.google.com/gsi/client)
 vite.config.js            # Vite + PWA 설정
 .env                      # VITE_GOOGLE_CLIENT_ID 설정됨
@@ -55,7 +67,7 @@ vite.config.js            # Vite + PWA 설정
 
 ## Current State
 
-**Phase 1~4 완료. 다음 작업: Phase 5.**
+**Phase 1~7 + GitHub Pages 배포까지 완료.** 이후 순서/하위할일 UX 개선(커밋 3285b04)과 `TodayTasks.jsx` 컴포넌트 분리 리팩토링까지 진행됨.
 
 | Phase | 내용 | 상태 |
 |-------|------|------|
@@ -63,59 +75,64 @@ vite.config.js            # Vite + PWA 설정
 | 2 | Google Cloud: Tasks API 활성화, OAuth 웹 클라이언트 생성 | ✅ |
 | 3 | Google OAuth 로그인 + localStorage 토큰 캐싱(55분) | ✅ |
 | 4 | Google Tasks API 연동 — 실제 데이터 CRUD | ✅ |
-| 5 | 오프라인 저장 (Dexie/IndexedDB) | 다음 |
-| 6 | UI 개선 | 대기 |
-| 7 | PWA 완성 + GitHub Pages 배포 | 대기 |
+| 5 | 오프라인 저장 (Dexie/IndexedDB) | ✅ |
+| 6 | UI 개선 | ✅ |
+| 7 | PWA 완성 + GitHub Pages 배포 | ✅ |
 
-## Key Architecture Decisions (Phase 3~4)
+**다음 작업 (남은 정리):** `useTasks.js`(~462줄)의 CRUD/optimistic-update 중복 로직 정리 리팩토링.
+
+## Key Architecture Decisions
 
 - **인증**: Google Identity Services(GIS) Token model — 백엔드 불필요, 브라우저에서 직접 액세스 토큰 발급
 - **토큰 저장**: `localStorage`에 55분 TTL로 캐싱 → 앱 재실행 시 자동 로그인 (1시간 이내)
 - **API 연동**: `useTasks` 훅이 로컬 state와 API를 동시에 관리 (optimistic update)
+- **오프라인**: `useTasks`가 IndexedDB(`db/localDB.js`, Dexie)로 fallback — 온라인이면 API, 오프라인이면 로컬 캐시. `isOffline` 플래그로 배너 표시
+- **순서(ordering)**: Google Tasks의 `position`(사전식 문자열)을 단일 출처로 사용. 새 항목은 마지막 실제 형제(`previous`) 뒤에 추가해 생성순서 보존 (`useTasks.js`의 `lastRealId` 주석 참고)
 - **하위 작업(subtasks)**: Google Tasks의 `parent` 필드 활용 — 별도 태스크로 저장됨
 - **Google Cloud 프로젝트**: "My First Project" 사용, OAuth 클라이언트 이름 "TodayTasks Web"
 - **OAuth 앱 이름**: 로그인 팝업에 "주간뉴스-260616"으로 표시됨 — OAuth 동의 화면에서 수정 가능 (비기능적 이슈)
-
-## Phase 5 계획 (다음 작업)
-
-오프라인에서도 할 일 조회/추가가 되도록 IndexedDB에 데이터를 캐싱.
-- `src/db/localDB.js` 생성 (Dexie 사용, 이미 `package.json`에 포함)
-- `useTasks`에 오프라인 fallback 추가: 온라인이면 API, 오프라인이면 IndexedDB
-- PWA Service Worker가 백그라운드에서 동기화 처리
 
 The `workflows/` and `tools/` directories do not yet exist. Create them when the first workflow or tool is needed.
 
 ## TodayTasks Component Architecture
 
-`TodayTasks.jsx` is a single-file React component (~770 lines). All state lives in the top-level `TodayTasks` export — no external state management.
+`TodayTasks.jsx`(~360줄)가 컨테이너로 **모든 UI 상태**를 보유하고, 화면은 `components/`의 조각들로 조립한다 — 외부 상태관리 라이브러리 없음.
 
 **Component tree:**
 ```
 TodayTasks (main, all state here)
-├── MonthCalendar          — collapsible month grid picker
-├── CopyDateButton         — invisible <input type="date"> overlay trick (single-tap)
-├── LabeledDateField       — same invisible overlay trick for start/end date chips
-├── SubtaskList            — inline subtask add/toggle/remove
-└── TaskDetailModal        — bottom sheet (slide-up) for full task editing
+├── Header                 — 날짜/뷰 토글, 설정 진입
+├── TaskList               — 날짜별 할일 목록
+│   └── TaskRow            — 한 줄 (체크/제목수정/하위 펼침)
+│       └── SubtaskList    — inline 하위작업 추가·토글·삭제
+├── CalendarSheet          — 바텀시트 달력
+│   └── MonthCalendar      — 월 그리드 picker
+├── SettingsSheet          — 설정 바텀시트
+├── TaskDetailModal        — 할일 상세 편집 바텀시트(slide-up)
+│   ├── DateChip / LabeledDateField — invisible <input type="date"> 오버레이
+│   └── SubtaskList
+└── LoginScreen            — 미로그인 시
+(BottomSheet = 시트 공통 래퍼)
 ```
 
 **Key data shape per task:**
 ```js
-{ id, text, done, dueDate, date, notes, expanded, subtasks: [{ id, text, done }] }
+{ id, text, done, dueDate, date, notes, expanded, subtasks: [{ id, text, done }],
+  _listId, _parentId, _position }   // _접두사 = Google Tasks 동기화용 내부 필드
 ```
 - `date` = start date (optional), `dueDate` = end/due date
 - When both are set and `date < dueDate`, the task appears on every date in that range (`isTaskOnDate`)
+- 모델 변환은 `utils/taskModel.js`(`googleToTask` / `taskToGoogleBody` 등)에 모음
 
-**Date tone system** — drives chip colors based on `dueDate` vs today:
-- `overdue` → warm red (`#F3E0D8` / `#B5562F`)
-- `today` → sage green (`#E3EBE0` / `#4D6B4F`)
-- `future` → muted warm (`#EDEAE2` / `#6B6862`)
-- `none` → neutral
+**Design tokens** — 색상·톤·z-index·제스처 상수는 `styles/tokens.js`로 모음:
+- `C` = 색상 팔레트, `Z` = z-index 레이어
+- `TONE` = 날짜 톤(none/overdue/today/future) 배경·전경·테두리. `dateTone()`(`utils/date.js`)가 키 결정
+- `LONG_PRESS_MS`(450) · `PRESS_MOVE_TOLERANCE`(10) · `SWIPE_THRESHOLD`(50)
 
-**Gesture handling:**
-- Long-press (450 ms) on a task row enters multi-select mode
-- Horizontal swipe on the container shifts the selected date ±1 day
-- Both gestures cancel if pointer moves more than 10 px during press
+**Gesture handling** (`hooks/useTaskListGestures.js`):
+- 롱프레스(`LONG_PRESS_MS`) → 다중선택·드래그 진입
+- 컨테이너 가로 스와이프(`SWIPE_THRESHOLD` 이상) → 선택 날짜 ±1일 (좌→우 -1, 우→좌 +1)
+- press 중 `PRESS_MOVE_TOLERANCE`(10px) 넘게 움직이면 제스처 취소
 
 **Typography:** `.mono` = IBM Plex Mono, `.sans` = Inter (loaded via Google Fonts inline in JSX `<style>`)
 
