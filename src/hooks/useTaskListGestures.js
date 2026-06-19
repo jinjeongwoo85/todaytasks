@@ -76,7 +76,10 @@ export function useTaskListGestures(opts) {
   const onTouchStart = (e) => {
     if (!e.touches || e.touches.length !== 1) { swipeActiveRef.current = false; return; }
     const point = e.touches[0];
-    const rowEl = e.target.closest ? e.target.closest('[data-task-id]') : null;
+    // 하위 할일 영역(자체 드래그 정렬 보유)에서 시작된 터치는 부모 행 누름으로 보지 않는다.
+    // 그렇지 않으면 하위 할일 롱프레스/드래그가 부모 할일 선택·드래그를 동시에 일으킨다.
+    const inSubtasks = e.target.closest && e.target.closest('[data-list-subtasks]');
+    const rowEl = !inSubtasks && e.target.closest ? e.target.closest('[data-task-id]') : null;
     const id = rowEl ? rowEl.getAttribute('data-task-id') : null;
     swipeStartRef.current = { x: point.clientX, y: point.clientY };
     swipeActiveRef.current = true;

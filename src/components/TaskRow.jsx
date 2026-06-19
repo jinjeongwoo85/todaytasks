@@ -92,7 +92,9 @@ export default function TaskRow({
       </div>
 
       {t.expanded && (
-        <div className="expand-panel" style={{ paddingLeft: '32px', paddingBottom: '12px' }}>
+        // data-list-subtasks: 하위 할일 영역은 자체 드래그 정렬(useReorderDrag)을 쓰므로
+        // 컨테이너 제스처 hook이 이 안에서 시작된 터치를 "부모 행 누름"으로 오인하지 않게 표시.
+        <div className="expand-panel" data-list-subtasks style={{ paddingLeft: '32px', paddingBottom: '12px' }}>
           <SubtaskList
             subtasks={orderSubtasks(t.subtasks, subtaskOrder)}
             onToggle={onToggleSubtask}
