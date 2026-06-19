@@ -12,17 +12,10 @@ import { toneStyle, rowDateLabel } from '../utils/date';
 import DateChip from './DateChip';
 import SubtaskList from './SubtaskList';
 
-function orderSubtasks(subtasks, order) {
-  if (!order) return subtasks;
-  const inOrder = order.map((id) => subtasks.find((s) => s.id === id)).filter(Boolean);
-  const rest = subtasks.filter((s) => !order.includes(s.id));
-  return [...inOrder, ...rest];
-}
-
 export default function TaskRow({
   task, selected, isDragging, anyDragging, shift, dragOffset, justDropped, showDivider,
   onToggleTask, onTextClick, onOpenDateChip, onToggleExpand,
-  subDraft, onSubDraftChange, subtaskOrder, onToggleSubtask, onRemoveSubtask, onAddSubtask, onReorderSubtasks,
+  subDraft, onSubDraftChange, onToggleSubtask, onRemoveSubtask, onAddSubtask, onReorderSubtasks,
 }) {
   const t = task;
   const subDone = t.subtasks.filter((s) => s.done).length;
@@ -123,7 +116,7 @@ export default function TaskRow({
             }}
           >
             <SubtaskList
-              subtasks={orderSubtasks(t.subtasks, subtaskOrder)}
+              subtasks={t.subtasks}
               onToggle={onToggleSubtask}
               onRemove={onRemoveSubtask}
               draft={subDraft}

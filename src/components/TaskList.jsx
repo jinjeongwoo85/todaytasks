@@ -8,7 +8,7 @@ import TaskRow from './TaskRow';
 
 export default function TaskList({
   tasks, viewMode, dragInfo, dropIndex, settlingId, selectedIds,
-  subDrafts, subtaskOrders, rowHandlers,
+  subDrafts, rowHandlers,
 }) {
   const anyDragging = !!dragInfo;
   return (
@@ -34,7 +34,6 @@ export default function TaskList({
             justDropped={settlingId === t.id}
             showDivider={i < tasks.length - 1 && !anyDragging}
             subDraft={subDrafts[t.id] || ''}
-            subtaskOrder={subtaskOrders[t.id]}
             onToggleTask={rowHandlers.onToggleTask}
             onTextClick={rowHandlers.onTextClick}
             onOpenDateChip={rowHandlers.onOpenDateChip}
@@ -43,7 +42,7 @@ export default function TaskList({
             onToggleSubtask={(subId) => rowHandlers.onToggleSubtask(t.id, subId)}
             onRemoveSubtask={(subId) => rowHandlers.onRemoveSubtask(t.id, subId)}
             onAddSubtask={() => rowHandlers.onAddSubtask(t.id)}
-            onReorderSubtasks={(newIds) => rowHandlers.onReorderSubtasks(t.id, newIds)}
+            onReorderSubtasks={(newIds, movedSubId) => rowHandlers.onReorderSubtasks(t.id, newIds, movedSubId)}
           />
         );
       })}

@@ -37,7 +37,7 @@ export function useReorderDrag(items, onReorder) {
       const newIds = items.map((s) => s.id);
       const [moved] = newIds.splice(from, 1);
       newIds.splice(to > from ? to - 1 : to, 0, moved);
-      onReorder(newIds);
+      onReorder(newIds, moved); // moved = 이동한 항목 id
     }
     setDrag(null);
   };

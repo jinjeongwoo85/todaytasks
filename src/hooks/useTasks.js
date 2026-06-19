@@ -27,7 +27,19 @@ function gToLocal(gTask, listId) {
     subtasks: [],
     _listId: listId,
     _parentId: gTask.parent || null,
+    _position: gTask.position || '',
   };
+}
+
+// Google position(사전식 문자열) 오름차순. 누락(temp 등)은 맨 뒤로.
+// raw gTask(`position`)와 로컬 모델(`_position`) 양쪽 모두 지원.
+function byPosition(a, b) {
+  const pa = a._position ?? a.position ?? '';
+  const pb = b._position ?? b.position ?? '';
+  if (!pa && !pb) return 0;
+  if (!pa) return 1;
+  if (!pb) return -1;
+  return pa < pb ? -1 : pa > pb ? 1 : 0;
 }
 
 function dueParam(iso) {
@@ -85,6 +97,15 @@ async function flushPendingOps(token, listId) {
       } else if (op.type === 'removeSubtask') {
         const id = resolve(p.subId);
         if (!isTemp(id)) await api.deleteTask(token, listId, id);
+
+      } else if (op.type === 'moveTask') {
+        const id = resolve(p.id);
+        if (!isTemp(id)) {
+          await api.moveTask(token, listId, id, {
+            parent: p.parent ? resolve(p.parent) : undefined,
+            previous: p.previous ? resolve(p.previous) : undefined,
+          });
+        }
       }
 
       await db.pendingOps.delete(op.id);
@@ -145,13 +166,14 @@ export function useTasks(accessToken) {
           const gTasks = await api.fetchTasks(accessToken, lid);
           if (cancelled) return;
 
-          const parents = gTasks.filter((t) => !t.parent);
+          const parents = gTasks.filter((t) => !t.parent).sort(byPosition);
           const children = gTasks.filter((t) => t.parent);
           const local = parents.map((pt) => ({
             ...gToLocal(pt, lid),
             subtasks: children
               .filter((ct) => ct.parent === pt.id)
-              .map((ct) => ({ id: ct.id, text: ct.title || '', done: ct.status === 'completed', dueDate: ct.due ? ct.due.split('T')[0] : null, notes: ct.notes || '' })),
+              .sort(byPosition)
+              .map((ct) => ({ id: ct.id, text: ct.title || '', done: ct.status === 'completed', dueDate: ct.due ? ct.due.split('T')[0] : null, notes: ct.notes || '', _position: ct.position || '' })),
           }));
 
           if (!cancelled) {
@@ -324,6 +346,50 @@ export function useTasks(accessToken) {
     }
   }, [accessToken, listId]);
 
+  // 최상위 할일 순서 변경 — newOrder(보이는 목록의 새 id 순서)에서 movedId 앞 항목을 previous로.
+  // 낙관적: 전체 tasks 배열에서 movedId를 previous 뒤(없으면 맨 앞)로 이동. 서버는 move API로 동기화.
+  const reorderTask = useCallback((movedId, newOrder) => {
+    const idx = newOrder.indexOf(movedId);
+    if (idx === -1) return;
+    const previous = idx > 0 ? newOrder[idx - 1] : undefined;
+    setTasks((prev) => {
+      const moved = prev.find((t) => t.id === movedId);
+      if (!moved) return prev;
+      const rest = prev.filter((t) => t.id !== movedId);
+      const at = previous ? rest.findIndex((t) => t.id === previous) + 1 : 0;
+      rest.splice(at, 0, moved);
+      return rest;
+    });
+    if (!listId) return;
+    if (!navigator.onLine) {
+      db.pendingOps.add({ type: 'moveTask', payload: { id: movedId, previous }, createdAt: Date.now() }).catch(() => {});
+    } else {
+      api.moveTask(accessToken, listId, movedId, { previous }).catch(() => {});
+    }
+  }, [accessToken, listId]);
+
+  // 하위할일 순서 변경 — 같은 부모 내. newSubOrder에서 movedSubId 앞 항목을 previous로.
+  const reorderSubtask = useCallback((taskId, movedSubId, newSubOrder) => {
+    const idx = newSubOrder.indexOf(movedSubId);
+    if (idx === -1) return;
+    const previous = idx > 0 ? newSubOrder[idx - 1] : undefined;
+    setTasks((prev) => prev.map((t) => {
+      if (t.id !== taskId) return t;
+      const moved = t.subtasks.find((s) => s.id === movedSubId);
+      if (!moved) return t;
+      const rest = t.subtasks.filter((s) => s.id !== movedSubId);
+      const at = previous ? rest.findIndex((s) => s.id === previous) + 1 : 0;
+      rest.splice(at, 0, moved);
+      return { ...t, subtasks: rest };
+    }));
+    if (!listId) return;
+    if (!navigator.onLine) {
+      db.pendingOps.add({ type: 'moveTask', payload: { id: movedSubId, parent: taskId, previous }, createdAt: Date.now() }).catch(() => {});
+    } else {
+      api.moveTask(accessToken, listId, movedSubId, { parent: taskId, previous }).catch(() => {});
+    }
+  }, [accessToken, listId]);
+
   const copyTask = useCallback(async (task, targetDueDate) => {
     if (!listId) return;
     const previous = lastRealId(tasksRef.current); // 복사본도 맨 끝에 삽입
@@ -376,5 +442,5 @@ export function useTasks(accessToken) {
     }
   }, [accessToken, listId]);
 
-  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, copyTask };
+  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
 }

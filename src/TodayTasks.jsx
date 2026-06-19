@@ -27,13 +27,9 @@ export default function TodayTasks() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [datePickerTask, setDatePickerTask] = useState(null);
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
-  const [taskOrder, setTaskOrder] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('todaytasks_order') || '[]'); } catch { return []; }
-  });
-  const [subtaskOrders, setSubtaskOrders] = useState({});
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
-  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, copyTask } = useTasks(accessToken);
+  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
 
   const latestStateRef = useRef({});
   const backEntryPushedRef = useRef(false);
@@ -74,12 +70,9 @@ export default function TodayTasks() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
-  const getOrderedTasks = () => {
-    const base = viewMode === 'all' ? tasks : tasks.filter((t) => isTaskOnDate(t, selectedDate));
-    const inOrder = taskOrder.map((id) => base.find((t) => t.id === id)).filter(Boolean);
-    const rest = base.filter((t) => !taskOrder.includes(t.id));
-    return [...inOrder, ...rest];
-  };
+  // tasks는 로드 시 Google position순으로 정렬됨 → 여기선 viewMode/날짜 필터만.
+  const getOrderedTasks = () =>
+    viewMode === 'all' ? tasks : tasks.filter((t) => isTaskOnDate(t, selectedDate));
 
   const allForDate = getOrderedTasks();
   const visibleTasks = allForDate.filter((t) => !hideCompleted || !t.done);
@@ -117,10 +110,6 @@ export default function TodayTasks() {
     setSelectedDate(toISO(d));
   };
 
-  const reorderSubtasks = (taskId, newIds) => {
-    setSubtaskOrders((prev) => ({ ...prev, [taskId]: newIds }));
-  };
-
   // 메인 리스트 제스처(스와이프·롱프레스 다중선택·드래그 정렬)를 단일 native 리스너 경로로 통합.
   // 스와이프는 날짜뷰이고 시트/모달/선택모드가 아닐 때만 허용(기존 가드 동일).
   const swipeEnabled = viewMode === 'date' && !calendarOpen && editingTaskId === null && selectedIds.size === 0;
@@ -129,10 +118,7 @@ export default function TodayTasks() {
     swipeEnabled,
     onToggleSelect: toggleSelect,
     onShiftDate: shiftSelectedDate,
-    onReorder: (newOrder) => {
-      setTaskOrder(newOrder);
-      try { localStorage.setItem('todaytasks_order', JSON.stringify(newOrder)); } catch {}
-    },
+    onReorder: (newOrder, movedId) => reorderTask(movedId, newOrder),
   });
 
   const handleTextClick = (id) => {
@@ -222,7 +208,7 @@ export default function TodayTasks() {
     onToggleSubtask: (id, subId) => toggleSubtask(id, subId),
     onRemoveSubtask: (id, subId) => removeSubtask(id, subId),
     onAddSubtask: (id) => { addSubtask(id, subDrafts[id] || ''); setSubDrafts((prev) => ({ ...prev, [id]: '' })); },
-    onReorderSubtasks: (id, newIds) => reorderSubtasks(id, newIds),
+    onReorderSubtasks: (id, newIds, movedSubId) => reorderSubtask(id, movedSubId, newIds),
   };
 
   if (isSilentTrying || loading) {
@@ -288,7 +274,6 @@ export default function TodayTasks() {
           settlingId={gestures.settlingId}
           selectedIds={selectedIds}
           subDrafts={subDrafts}
-          subtaskOrders={subtaskOrders}
           rowHandlers={rowHandlers}
         />
 

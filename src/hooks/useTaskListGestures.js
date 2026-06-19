@@ -116,7 +116,8 @@ export function useTaskListGestures(opts) {
       const [moved] = newOrder.splice(fromIdx, 1);
       const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
       newOrder.splice(insertAt, 0, moved);
-      optsRef.current.onReorder(newOrder);
+      optsRef.current.onReorder(newOrder, moved); // moved = 이동한 할일 id
+
     }
     setDragInfo(null);
     // 드롭 후 짧은 안착 애니메이션(.settle): 위치는 즉시 확정되고 scale/그림자만 가라앉음.

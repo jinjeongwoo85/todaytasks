@@ -36,6 +36,20 @@ export async function createTask(token, listId, body, { parent, previous } = {})
   return res.json();
 }
 
+// 할일을 형제 목록 내에서 이동(순서 변경). parent/previous는 쿼리 파라미터로 전달.
+// previous 없으면 형제 중 맨 위로, 있으면 그 형제 바로 뒤로 위치(=서버 position 갱신).
+export async function moveTask(token, listId, taskId, { parent, previous } = {}) {
+  const params = new URLSearchParams();
+  if (parent) params.set('parent', parent);
+  if (previous) params.set('previous', previous);
+  const qs = params.toString();
+  const res = await fetch(`${BASE}/lists/${listId}/tasks/${taskId}/move${qs ? `?${qs}` : ''}`, {
+    method: 'POST',
+    headers: h(token),
+  });
+  return res.json();
+}
+
 export async function patchTask(token, listId, taskId, body) {
   const res = await fetch(`${BASE}/lists/${listId}/tasks/${taskId}`, {
     method: 'PATCH',
