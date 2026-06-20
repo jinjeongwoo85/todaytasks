@@ -39,7 +39,7 @@ VITE_GOOGLE_CLIENT_ID=xxxxxx.apps.googleusercontent.com
 ```
 src/
   main.jsx                # React 앱 진입점
-  TodayTasks.jsx          # 메인 컨테이너 (~360줄) — 모든 UI 상태 + 화면 조립
+  App.jsx                 # 메인 컨테이너 (~360줄, 구 TodayTasks.jsx) — 모든 UI 상태 + 화면 조립
   hooks/
     useGoogleAuth.js      # Google OAuth 토큰 관리 + localStorage 캐싱
     useTasks.js           # Tasks API CRUD + 로컬 state + IndexedDB 오프라인 fallback
@@ -67,7 +67,7 @@ vite.config.js            # Vite + PWA 설정
 
 ## Current State
 
-**Phase 1~7 + GitHub Pages 배포까지 완료.** 이후 순서/하위할일 UX 개선(커밋 3285b04)과 `TodayTasks.jsx` 컴포넌트 분리 리팩토링까지 진행됨.
+**Phase 1~7 + GitHub Pages 배포까지 완료.** 이후 순서/하위할일 UX 개선(커밋 3285b04)과 컴포넌트 분리 리팩토링, 재구조화 5·6단계(데이터/동기화 단일화, 횡단 hook 추출, `TodayTasks.jsx`→`App.jsx` 개명)까지 진행됨.
 
 | Phase | 내용 | 상태 |
 |-------|------|------|
@@ -95,13 +95,13 @@ vite.config.js            # Vite + PWA 설정
 
 The `workflows/` and `tools/` directories do not yet exist. Create them when the first workflow or tool is needed.
 
-## TodayTasks Component Architecture
+## App Component Architecture (구 TodayTasks)
 
-`TodayTasks.jsx`(~360줄)가 컨테이너로 **모든 UI 상태**를 보유하고, 화면은 `components/`의 조각들로 조립한다 — 외부 상태관리 라이브러리 없음.
+`App.jsx`(구 `TodayTasks.jsx`, ~360줄)가 컨테이너로 **모든 UI 상태**를 보유하고, 화면은 `components/`의 조각들로 조립한다 — 외부 상태관리 라이브러리 없음.
 
 **Component tree:**
 ```
-TodayTasks (main, all state here)
+App (main, all state here)
 ├── Header                 — 날짜/뷰 토글, 설정 진입
 ├── TaskList               — 날짜별 할일 목록
 │   └── TaskRow            — 한 줄 (체크/제목수정/하위 펼침)

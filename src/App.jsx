@@ -17,7 +17,7 @@ import TaskDetailModal from './components/TaskDetailModal';
 import ClockTimePicker from './components/ClockTimePicker';
 import LoginScreen from './components/LoginScreen';
 
-export default function TodayTasks() {
+export default function App() {
   const today = useToday(); // 자정/포커스 시 갱신되어 "오늘" 라벨·톤을 최신으로 유지
   const [draft, setDraft] = useState('');
   const [subDrafts, setSubDrafts] = useState({});
