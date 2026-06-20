@@ -210,7 +210,6 @@ export default function App() {
     onToggleExpand: toggleExpand,
     onSubDraftChange: (id, v) => setSubDrafts((prev) => ({ ...prev, [id]: v })),
     onToggleSubtask: (id, subId) => toggleSubtask(id, subId),
-    onUpdateSubtask: (id, subId, text) => updateSubtask(id, subId, text),
     onRemoveSubtask: (id, subId) => removeSubtask(id, subId),
     onAddSubtask: (id) => { addSubtask(id, subDrafts[id] || ''); setSubDrafts((prev) => ({ ...prev, [id]: '' })); },
     onReorderSubtasks: (id, newIds, movedSubId) => reorderSubtask(id, movedSubId, newIds),

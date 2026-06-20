@@ -15,7 +15,7 @@ import SubtaskChips from './SubtaskChips';
 export default function TaskRow({
   task, selected, isDragging, anyDragging, shift, dragOffset, justDropped, showDivider,
   onToggleTask, onTextClick, onOpenDateChip, onToggleExpand,
-  subDraft, onSubDraftChange, onToggleSubtask, onUpdateSubtask, onRemoveSubtask, onAddSubtask, onReorderSubtasks,
+  subDraft, onSubDraftChange, onToggleSubtask, onRemoveSubtask, onAddSubtask, onReorderSubtasks,
 }) {
   const t = task;
   const subDone = t.subtasks.filter((s) => s.done).length;

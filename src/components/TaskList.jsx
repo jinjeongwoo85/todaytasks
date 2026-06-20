@@ -40,7 +40,6 @@ export default function TaskList({
             onToggleExpand={rowHandlers.onToggleExpand}
             onSubDraftChange={(v) => rowHandlers.onSubDraftChange(t.id, v)}
             onToggleSubtask={(subId) => rowHandlers.onToggleSubtask(t.id, subId)}
-            onUpdateSubtask={(subId, text) => rowHandlers.onUpdateSubtask(t.id, subId, text)}
             onRemoveSubtask={(subId) => rowHandlers.onRemoveSubtask(t.id, subId)}
             onAddSubtask={() => rowHandlers.onAddSubtask(t.id)}
             onReorderSubtasks={(newIds, movedSubId) => rowHandlers.onReorderSubtasks(t.id, newIds, movedSubId)}
