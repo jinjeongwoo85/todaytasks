@@ -34,28 +34,30 @@ export function useGoogleAuth() {
   const [isSilentTrying, setIsSilentTrying] = useState(!loadStoredToken());
   const tokenClientRef = useRef(null);
 
+  // GIS 초기화(마운트 1회): tokenClient를 1회 생성(signIn에 필요) + 저장 토큰이 없을 때만
+  // 조용한 로그인(prompt:none) 시도. 기존 2개 useEffect를 하나로 통합.
   useEffect(() => {
-    if (accessToken) return; // 저장된 토큰이 있으면 GIS 초기화 불필요
-
+    const needSilent = !accessToken; // 마운트 시 저장된 토큰이 없으면 조용한 로그인 시도
     const deadline = Date.now() + 5000; // GIS 로드 최대 5초 대기
     const check = () => {
       if (window.google?.accounts?.oauth2) {
-        tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          callback: (response) => {
-            if (response.access_token) {
-              setAccessToken(response.access_token);
-              saveToken(response.access_token);
-            }
-            setIsSilentTrying(false);
-          },
-          error_callback: () => {
-            setIsSilentTrying(false);
-          },
-        });
+        if (!tokenClientRef.current) {
+          tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: (response) => {
+              if (response.access_token) {
+                setAccessToken(response.access_token);
+                saveToken(response.access_token);
+              }
+              setIsSilentTrying(false);
+            },
+            error_callback: () => setIsSilentTrying(false),
+          });
+        }
         setIsReady(true);
-        tokenClientRef.current.requestAccessToken({ prompt: 'none' });
+        if (needSilent) tokenClientRef.current.requestAccessToken({ prompt: 'none' });
+        else setIsSilentTrying(false);
       } else if (Date.now() < deadline) {
         setTimeout(check, 100);
       } else {
@@ -63,28 +65,7 @@ export function useGoogleAuth() {
       }
     };
     check();
-  }, [accessToken]);
-
-  // 저장된 토큰이 있어도 signIn은 필요할 수 있으므로 별도 초기화
-  useEffect(() => {
-    const check = () => {
-      if (window.google?.accounts?.oauth2 && !tokenClientRef.current) {
-        tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          callback: (response) => {
-            if (response.access_token) {
-              setAccessToken(response.access_token);
-              saveToken(response.access_token);
-            }
-          },
-        });
-        setIsReady(true);
-      } else if (!window.google?.accounts?.oauth2) {
-        setTimeout(check, 100);
-      }
-    };
-    check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const signIn = useCallback(() => {
