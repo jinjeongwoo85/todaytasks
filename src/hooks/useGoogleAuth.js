@@ -4,21 +4,24 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/tasks';
 const STORAGE_KEY = 'tt_auth';
 const TOKEN_TTL_MS = 55 * 60 * 1000; // 55분 (구글 토큰 유효시간 60분보다 5분 여유)
+const REFRESH_AT_MS = 50 * 60 * 1000; // 발급 50분 뒤 조용히 자동 갱신(만료 전) → 로그인 유지
 
-function loadStoredToken() {
+// 저장된 토큰 { token, savedAt } (만료 지났으면 제거 후 null)
+function getStored() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const { token, savedAt } = JSON.parse(raw);
-    if (Date.now() - savedAt > TOKEN_TTL_MS) {
+    const data = JSON.parse(raw);
+    if (Date.now() - data.savedAt > TOKEN_TTL_MS) {
       localStorage.removeItem(STORAGE_KEY);
       return null;
     }
-    return token;
+    return data;
   } catch {
     return null;
   }
 }
+const loadStoredToken = () => getStored()?.token ?? null;
 
 function saveToken(token) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, savedAt: Date.now() }));
@@ -33,11 +36,22 @@ export function useGoogleAuth() {
   const [isReady, setIsReady] = useState(false);
   const [isSilentTrying, setIsSilentTrying] = useState(!loadStoredToken());
   const tokenClientRef = useRef(null);
+  const refreshTimerRef = useRef(null);
 
-  // GIS 초기화(마운트 1회): tokenClient를 1회 생성(signIn에 필요) + 저장 토큰이 없을 때만
-  // 조용한 로그인(prompt:none) 시도. 기존 2개 useEffect를 하나로 통합.
+  // 자동 갱신 예약 — savedAt 기준 REFRESH_AT_MS 뒤에 조용히(prompt:none) 새 토큰 발급.
+  // 구글 세션이 살아있으면 팝업 없이 갱신되어 "1시간마다 재로그인"이 사라진다.
+  const scheduleRefresh = useCallback((savedAt) => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    const delay = Math.max(savedAt + REFRESH_AT_MS - Date.now(), 2000);
+    refreshTimerRef.current = setTimeout(() => {
+      tokenClientRef.current?.requestAccessToken({ prompt: 'none' });
+    }, delay);
+  }, []);
+
+  // GIS 초기화(마운트 1회): tokenClient 1회 생성 + 저장 토큰 없으면 조용한 로그인 시도 +
+  // 토큰이 있으면 만료 전 자동 갱신 예약.
   useEffect(() => {
-    const needSilent = !accessToken; // 마운트 시 저장된 토큰이 없으면 조용한 로그인 시도
+    const needSilent = !accessToken;
     const deadline = Date.now() + 5000; // GIS 로드 최대 5초 대기
     const check = () => {
       if (window.google?.accounts?.oauth2) {
@@ -49,6 +63,7 @@ export function useGoogleAuth() {
               if (response.access_token) {
                 setAccessToken(response.access_token);
                 saveToken(response.access_token);
+                scheduleRefresh(Date.now()); // 다음 갱신 재예약
               }
               setIsSilentTrying(false);
             },
@@ -56,8 +71,13 @@ export function useGoogleAuth() {
           });
         }
         setIsReady(true);
-        if (needSilent) tokenClientRef.current.requestAccessToken({ prompt: 'none' });
-        else setIsSilentTrying(false);
+        if (needSilent) {
+          tokenClientRef.current.requestAccessToken({ prompt: 'none' });
+        } else {
+          setIsSilentTrying(false);
+          const stored = getStored(); // 캐시 토큰 기준으로 만료 전 갱신 예약
+          if (stored) scheduleRefresh(stored.savedAt);
+        }
       } else if (Date.now() < deadline) {
         setTimeout(check, 100);
       } else {
@@ -65,6 +85,7 @@ export function useGoogleAuth() {
       }
     };
     check();
+    return () => { if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -73,6 +94,7 @@ export function useGoogleAuth() {
   }, []);
 
   const signOut = useCallback(() => {
+    if (refreshTimerRef.current) { clearTimeout(refreshTimerRef.current); refreshTimerRef.current = null; }
     if (accessToken) {
       window.google.accounts.oauth2.revoke(accessToken, () => {});
     }
