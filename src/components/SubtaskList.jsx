@@ -3,10 +3,11 @@
 //   - 측정은 바깥 래퍼(data-subtask-id, 변형 X), 시각 이동은 안쪽 래퍼 transform만.
 // 탭: 앞 동그라미 = 완료 토글, 글자(뒷부분) = 제목 인라인 편집(롱프레스 직후 탭은 무시).
 import { useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { C } from '../styles/tokens';
 import { useReorderDragVertical } from '../hooks/useReorderDragVertical';
 import SubtaskAddRow from './SubtaskAddRow';
+import Checkbox from './Checkbox';
 
 export default function SubtaskList({ subtasks, onToggle, onRemove, onUpdate, draft, onDraftChange, onAdd, compact, onReorder }) {
   const drag = useReorderDragVertical(subtasks, onReorder);
@@ -69,15 +70,10 @@ export default function SubtaskList({ subtasks, onToggle, onRemove, onUpdate, dr
                 >
                   <button
                     onClick={() => onToggle(s.id)}
-                    style={{
-                      width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
-                      border: `1.5px solid ${s.done ? C.sage : C.mute}`,
-                      background: s.done ? C.sage : 'transparent',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0,
-                    }}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexShrink: 0 }}
                     aria-label={s.done ? '완료 취소' : '완료로 표시'}
                   >
-                    <Check size={11} color={C.inkInv} style={{ opacity: s.done ? 1 : 0 }} />
+                    <Checkbox done={s.done} size={18} checkSize={11} />
                   </button>
 
                   {editing ? (

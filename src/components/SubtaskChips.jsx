@@ -3,10 +3,11 @@
 //  - 롱프레스 후 드래그 = 실시간 재배치(useReorderDragHorizontal). 잡은 칩은 손가락을 따라다니는
 //    floating 사본이 되고, 원래 자리엔 빈자리(placeholder)가 남으며, 나머지 칩이 즉시(스냅) 비켜준다.
 //    (슬라이드 애니메이션은 의도적으로 없음 — 측정 race로 칩이 튀던 버그를 원천 차단.)
-import { Check, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { C, Z } from '../styles/tokens';
 import { useReorderDragHorizontal } from '../hooks/useReorderDragHorizontal';
 import SubtaskAddRow from './SubtaskAddRow';
+import Checkbox from './Checkbox';
 
 export default function SubtaskChips({ subtasks, onToggle, onRemove, draft, onDraftChange, onAdd, onReorder }) {
   const drag = useReorderDragHorizontal(subtasks, onReorder);
@@ -73,16 +74,7 @@ function Chip({ s, onClick, onRemove, dragging, style }) {
         ...style,
       }}
     >
-      <span
-        style={{
-          width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0,
-          border: `1.5px solid ${s.done ? C.sage : C.mute}`,
-          background: s.done ? C.sage : 'transparent',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-      >
-        <Check size={10} color={C.inkInv} style={{ opacity: s.done ? 1 : 0 }} />
-      </span>
+      <Checkbox done={s.done} size={16} checkSize={10} />
       <span style={{ fontSize: '13px', color: s.done ? C.mute : C.ink, textDecoration: s.done ? 'line-through' : 'none', whiteSpace: 'nowrap' }}>
         {s.text}
       </span>

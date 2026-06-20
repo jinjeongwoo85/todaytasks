@@ -6,7 +6,8 @@
 //   - isDragging: 손가락을 따라 떠오름(translateY(dragOffset)+scale+그림자), 전환 없음(1:1 추종)
 //   - 그 외: 밀려나기(translateY(shift)), 부드러운 전환
 //   - justDropped: 드롭 직후 .settle 애니메이션(scale/그림자 가라앉음)
-import { Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import Checkbox from './Checkbox';
 import { C } from '../styles/tokens';
 import { toneStyle, rowDateLabel } from '../utils/date';
 import DateChip from './DateChip';
@@ -52,15 +53,10 @@ export default function TaskRow({
         >
           <button
             onClick={() => onToggleTask(t.id)}
-            style={{
-              width: '22px', height: '22px', flexShrink: 0, marginRight: '10px',
-              border: `1.5px solid ${t.done ? C.sage : C.mute}`,
-              background: t.done ? C.sage : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0,
-            }}
+            style={{ background: 'none', border: 'none', padding: 0, marginRight: '10px', cursor: 'pointer', display: 'flex', flexShrink: 0 }}
             aria-label={t.done ? '완료 취소' : '완료로 표시'}
           >
-            <Check className="check-icon" size={14} color={C.inkInv} style={{ transform: t.done ? 'scale(1)' : 'scale(0)', opacity: t.done ? 1 : 0 }} />
+            <Checkbox done={t.done} size={22} radius="0" checkSize={14} animated />
           </button>
 
           <div

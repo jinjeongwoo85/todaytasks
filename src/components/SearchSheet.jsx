@@ -2,10 +2,11 @@
 // 결과는 범위별 섹션으로 그룹화. 할일·하위할일 섹션엔 완료상태 바. 체크박스로 완료 토글 가능.
 // 행 탭 → onPick(부모 할일 id)로 상세 모달 열기.
 import { useState, useMemo } from 'react';
-import { Search, Check, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { C } from '../styles/tokens';
 import BottomSheet from './BottomSheet';
 import ProgressBar from './ProgressBar';
+import Checkbox from './Checkbox';
 import { rowDateLabel, formatDateY } from '../utils/date';
 
 // 기간 매치용 — 할일의 [시작..종료] 구간(없으면 종료/시작 단일). 날짜 없으면 null.
@@ -234,8 +235,8 @@ function ResultRow({ done, onPick, check, label, labelSize, date }) {
 function SquareCheck({ done, onToggle }) {
   return (
     <button onClick={(e) => { e.stopPropagation(); onToggle(); }} aria-label={done ? '완료 취소' : '완료로 표시'}
-      style={{ width: '20px', height: '20px', flexShrink: 0, borderRadius: '3px', border: `1.5px solid ${done ? C.sage : C.mute}`, background: done ? C.sage : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}>
-      <Check size={13} color={C.inkInv} style={{ opacity: done ? 1 : 0 }} />
+      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
+      <Checkbox done={done} size={20} radius="3px" checkSize={13} />
     </button>
   );
 }
@@ -243,8 +244,8 @@ function SquareCheck({ done, onToggle }) {
 function CircleCheck({ done, onToggle }) {
   return (
     <button onClick={(e) => { e.stopPropagation(); onToggle(); }} aria-label={done ? '완료 취소' : '완료로 표시'}
-      style={{ width: '17px', height: '17px', flexShrink: 0, borderRadius: '50%', border: `1.5px solid ${done ? C.sage : C.mute}`, background: done ? C.sage : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}>
-      <Check size={11} color={C.inkInv} style={{ opacity: done ? 1 : 0 }} />
+      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
+      <Checkbox done={done} size={17} checkSize={11} />
     </button>
   );
 }
