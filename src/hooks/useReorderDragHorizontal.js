@@ -1,35 +1,37 @@
-// 하위할일 가로 칩 롱프레스 → 2D 드래그 정렬 hook (가로 wrap 전용).
-// 세로 버전(useReorderDragVertical)과 같은 패턴이되, 줄바꿈(flex-wrap)되는 칩을 다루므로
-// 단일축이 아니라 2D로 동작한다:
-//   - 잡은 칩이 손가락을 x·y 모두 따라 떠오름(offsetX/offsetY)
-//   - 드롭 위치는 칩들의 실측 사각형을 읽기순서(좌→우, 윗줄→아랫줄)로 훑어 계산
-// 컨테이너 단일 native 리스너(passive:false)로 구동:
-//   - 드래그 중 e.preventDefault()로 풀투리프레시/스크롤 차단
-//   - stopPropagation으로 부모(메인 리스트) 제스처와 격리
-// 측정 기준은 변형 안 되는 바깥 래퍼(data-subtask-id) → 시각 이동이 판정에 영향 없음.
+// 하위할일 가로 칩 롱프레스 → 실시간 재배치 드래그 hook (가로 wrap 전용).
+// 잡은 칩은 손가락을 따라다니는 떠 있는 사본(floating)이 되고, 원래 자리에는 같은 크기의
+// 빈자리(placeholder)가 남는다. 손가락이 움직이면 displayOrder(렌더 순서)를 실시간 재배치해
+// 나머지 칩이 자리를 비켜준다(컴포넌트가 FLIP로 부드럽게 미끄러뜨림). 놓으면 그 순서로 확정.
 //
-// 사용법:
-//   const drag = useReorderDragHorizontal(items, onReorder);
-//   <div ref={drag.containerRef} style={{ display:'flex', flexWrap:'wrap', touchAction:'pan-y' }}>
-//     {items.map((s)=>(
-//       <div data-subtask-id={s.id}>             // 측정 래퍼(변형 X)
-//         <div style={transform...}>...칩...</div> // 시각 래퍼(들어올림)
-//   drag.longPressFiredRef 로 롱프레스 직후 합성 click(칩 탭 토글) 억제.
+// 위치 판정은 드래그 시작 시 1회 캐시한 원래 칩 좌표(startRectsRef)를 기준으로 한다
+//   → 칩이 reflow돼도 판정 기준이 흔들리지 않아 oscillation(깜빡임) 없음.
+//
+// 컨테이너 단일 native 리스너(passive:false)로 구동:
+//   - 드래그 중 preventDefault(풀투리프레시/스크롤 차단) + stopPropagation(부모 리스트 제스처 격리).
+// drag.longPressFiredRef 로 롱프레스 직후 합성 click(칩 탭 토글) 억제.
 import { useState, useRef, useCallback } from 'react';
 import { LONG_PRESS_MS, PRESS_MOVE_TOLERANCE } from '../styles/tokens';
 
+const sameOrder = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
 export function useReorderDragHorizontal(items, onReorder) {
-  const [dragInfo, setDragInfo] = useState(null); // { id, originalIndex, startX, startY, offsetX, offsetY, currentX, currentY }
+  // drag: null | { dragId, originalIndex, w, h, fx, fy } (fx/fy = floating 사본의 viewport 좌상단)
+  const [drag, setDrag] = useState(null);
+  const [displayOrder, setDisplayOrder] = useState([]); // 드래그 중 렌더 순서(id 배열)
 
   const optsRef = useRef({ items, onReorder });
   optsRef.current = { items, onReorder };
-  const dragInfoRef = useRef(dragInfo);
-  dragInfoRef.current = dragInfo;
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
+  const displayOrderRef = useRef(displayOrder);
+  displayOrderRef.current = displayOrder;
 
   const longPressFiredRef = useRef(false);
   const pressTimerRef = useRef(null);
   const pressedIdRef = useRef(null);
   const startRef = useRef({ x: 0, y: 0 });
+  const grabRef = useRef({ dx: 0, dy: 0 }); // 손가락이 잡은 칩 내부의 오프셋
+  const startRectsRef = useRef([]);          // 드래그 시작 시점 모든 칩의 좌표(판정 기준)
   const containerElRef = useRef(null);
   const cleanupRef = useRef(null);
 
@@ -40,38 +42,39 @@ export function useReorderDragHorizontal(items, onReorder) {
     if (typeof navigator !== 'undefined' && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} }
   };
 
-  // 읽기순서(좌→우, 윗줄→아랫줄) 2D 히트테스트로 드롭 인덱스 계산.
-  // 포인터보다 "뒤"에 오는 첫 칩 = 아래 줄에 있거나, 같은 줄에서 포인터 오른쪽인 첫 칩.
-  const computeDropIndex = (px, py) => {
+  const measureChips = () => {
     const el = containerElRef.current;
-    if (!el) return 0;
+    if (!el) return [];
     const nodes = el.querySelectorAll('[data-subtask-id]');
+    const out = [];
     for (let i = 0; i < nodes.length; i++) {
-      const rect = nodes[i].getBoundingClientRect();
-      const afterPointer = py < rect.bottom && px < rect.left + rect.width / 2;
-      if (afterPointer) return i;
+      const id = nodes[i].getAttribute('data-subtask-id');
+      const r = nodes[i].getBoundingClientRect();
+      out.push({ id, left: r.left, top: r.top, width: r.width, height: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2 });
     }
-    return nodes.length;
+    return out;
   };
 
-  const commitDrag = (px, py) => {
-    const di = dragInfoRef.current;
-    if (!di) { setDragInfo(null); return; }
-    const { items: vis, onReorder: cb } = optsRef.current;
-    const fromIdx = di.originalIndex;
-    const toIdx = computeDropIndex(px, py);
-    if (cb && fromIdx !== toIdx && toIdx !== fromIdx + 1) {
-      const newIds = vis.map((s) => s.id);
-      const [moved] = newIds.splice(fromIdx, 1);
-      newIds.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, moved);
-      cb(newIds, moved); // moved = 이동한 하위할일 id
+  // 원래 좌표(startRectsRef) 기준 읽기순서 2D 판정으로, dragId를 끼울 위치의 displayOrder 계산.
+  const computeOrder = (px, py) => {
+    const { items: list } = optsRef.current;
+    const di = dragRef.current;
+    if (!di) return list.map((s) => s.id);
+    const rest = startRectsRef.current.filter((r) => r.id !== di.dragId); // 잡은 칩 제외, 원래 순서
+    const rowTol = (di.h || 28) * 0.6;
+    let ins = rest.length;
+    for (let i = 0; i < rest.length; i++) {
+      const r = rest[i];
+      const after = (py < r.cy - rowTol) || (Math.abs(py - r.cy) <= rowTol && px < r.cx);
+      if (after) { ins = i; break; }
     }
-    setDragInfo(null);
+    const restIds = list.map((s) => s.id).filter((id) => id !== di.dragId);
+    return [...restIds.slice(0, ins), di.dragId, ...restIds.slice(ins)];
   };
 
   const onTouchStart = (e) => {
     if (!e.touches || e.touches.length !== 1) return;
-    if (!optsRef.current.onReorder) return; // 정렬 비활성 시 드래그 안 함
+    if (!optsRef.current.onReorder) return;
     const point = e.touches[0];
     const chipEl = e.target.closest ? e.target.closest('[data-subtask-id]') : null;
     const id = chipEl ? chipEl.getAttribute('data-subtask-id') : null;
@@ -88,42 +91,66 @@ export function useReorderDragHorizontal(items, onReorder) {
     }
   };
 
+  const startDrag = (id, point) => {
+    const rects = measureChips();
+    const mine = rects.find((r) => r.id === id);
+    if (!mine) return false;
+    startRectsRef.current = rects;
+    grabRef.current = { dx: point.clientX - mine.left, dy: point.clientY - mine.top };
+    const originalIndex = optsRef.current.items.findIndex((s) => s.id === id);
+    const order = optsRef.current.items.map((s) => s.id);
+    setDisplayOrder(order);
+    setDrag({ dragId: id, originalIndex, w: mine.width, h: mine.height, fx: mine.left, fy: mine.top });
+    return true;
+  };
+
   const onTouchMove = (e) => {
     if (!e.touches || e.touches.length !== 1) return;
     const point = e.touches[0];
-    if (dragInfoRef.current) {
+    if (dragRef.current) {
       e.preventDefault();
       e.stopPropagation();
-      setDragInfo((prev) => prev
-        ? { ...prev, currentX: point.clientX, currentY: point.clientY, offsetX: point.clientX - prev.startX, offsetY: point.clientY - prev.startY }
-        : null);
+      const fx = point.clientX - grabRef.current.dx;
+      const fy = point.clientY - grabRef.current.dy;
+      setDrag((prev) => prev ? { ...prev, fx, fy } : prev);
+      const next = computeOrder(point.clientX, point.clientY);
+      if (!sameOrder(next, displayOrderRef.current)) setDisplayOrder(next);
       return;
     }
     const dx = point.clientX - startRef.current.x;
     const dy = point.clientY - startRef.current.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    // 롱프레스 전 손가락이 움직이면(스크롤 의도) 롱프레스 취소
     if (!longPressFiredRef.current) {
       if (dist > PRESS_MOVE_TOLERANCE) cancelPress();
       return;
     }
-    // 롱프레스 발동 후: 방향 무관 약간만 움직여도 드래그 시작
-    if (pressedIdRef.current && dist > 5) {
-      const id = pressedIdRef.current;
-      const idx = optsRef.current.items.findIndex((s) => s.id === id);
+    if (pressedIdRef.current && dist > 4) {
       e.preventDefault();
       e.stopPropagation();
-      setDragInfo({ id, originalIndex: idx, startX: point.clientX, startY: point.clientY, currentX: point.clientX, currentY: point.clientY, offsetX: 0, offsetY: 0 });
+      const id = pressedIdRef.current;
       pressedIdRef.current = null;
+      startDrag(id, point);
     }
+  };
+
+  const endDrag = () => {
+    const di = dragRef.current;
+    if (di) {
+      const { items: list, onReorder: cb } = optsRef.current;
+      const order = displayOrderRef.current;
+      const orig = list.map((s) => s.id);
+      if (cb && !sameOrder(order, orig)) cb(order, di.dragId);
+    }
+    setDrag(null);
+    setDisplayOrder([]);
+    startRectsRef.current = [];
   };
 
   const onTouchEnd = (e) => {
     cancelPress();
-    if (dragInfoRef.current) {
-      const point = e.changedTouches && e.changedTouches[0];
-      commitDrag(point ? point.clientX : 0, point ? point.clientY : 0);
+    if (dragRef.current) {
       e.stopPropagation();
+      endDrag();
     }
     // longPressFiredRef는 일부러 두어 직후 합성 click(칩 탭)을 SubtaskChips가 무시하게 함.
     // 다음 touchstart에서 false로 리셋됨.
@@ -142,20 +169,19 @@ export function useReorderDragHorizontal(items, onReorder) {
     el.addEventListener('touchstart', onStart, { passive: false });
     el.addEventListener('touchmove', onMove, { passive: false });
     el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
     cleanupRef.current = () => {
       el.removeEventListener('touchstart', onStart);
       el.removeEventListener('touchmove', onMove);
       el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
     };
   }, []);
 
-  const dropIndex = dragInfo ? computeDropIndex(dragInfo.currentX, dragInfo.currentY) : -1;
-
   return {
     containerRef,
-    dragInfo,
-    dropIndex,
+    drag,            // { dragId, w, h, fx, fy } | null
+    displayOrder,    // 드래그 중 렌더 순서(id) — 비어있으면 평소 순서 사용
     longPressFiredRef,
-    isDragging: (id) => !!dragInfo && dragInfo.id === id,
   };
 }
