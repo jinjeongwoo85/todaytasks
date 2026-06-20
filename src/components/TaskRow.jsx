@@ -1,4 +1,4 @@
-// 할 일 한 줄 — 체크박스 + 제목/하위카운트 + 날짜칩 + 펼치기. 펼치면 SubtaskList.
+// 할 일 한 줄 — 체크박스 + 제목/하위카운트 + 날짜칩 + 펼치기. 펼치면 SubtaskChips(가로 칩).
 // 제스처(롱프레스→다중선택/드래그)는 컨테이너 hook이 전담. 여기선 클릭 콜백과 드래그 표현만.
 //
 // 드래그 표현: 바깥 래퍼(data-task-id, 측정 기준)는 절대 변형하지 않고, 안쪽 shift 래퍼에만
@@ -10,7 +10,7 @@ import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { C } from '../styles/tokens';
 import { toneStyle, rowDateLabel } from '../utils/date';
 import DateChip from './DateChip';
-import SubtaskList from './SubtaskList';
+import SubtaskChips from './SubtaskChips';
 
 export default function TaskRow({
   task, selected, isDragging, anyDragging, shift, dragOffset, justDropped, showDivider,
@@ -115,16 +115,14 @@ export default function TaskRow({
               borderRadius: selected ? '0 0 8px 8px' : 0,
             }}
           >
-            <SubtaskList
+            <SubtaskChips
               subtasks={t.subtasks}
               onToggle={onToggleSubtask}
-              onUpdate={onUpdateSubtask}
               onRemove={onRemoveSubtask}
               draft={subDraft}
               onDraftChange={onSubDraftChange}
               onAdd={onAddSubtask}
               onReorder={onReorderSubtasks}
-              compact
             />
           </div>
         )}

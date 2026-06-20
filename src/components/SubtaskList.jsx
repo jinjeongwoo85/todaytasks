@@ -5,10 +5,10 @@
 import { useState } from 'react';
 import { Plus, Check, X, CornerDownRight } from 'lucide-react';
 import { C } from '../styles/tokens';
-import { useReorderDrag } from '../hooks/useReorderDrag';
+import { useReorderDragVertical } from '../hooks/useReorderDragVertical';
 
 export default function SubtaskList({ subtasks, onToggle, onRemove, onUpdate, draft, onDraftChange, onAdd, compact, onReorder }) {
-  const drag = useReorderDrag(subtasks, onReorder);
+  const drag = useReorderDragVertical(subtasks, onReorder);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
 
