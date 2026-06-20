@@ -40,6 +40,17 @@ export const dueParam = (iso) => (iso ? `${iso}T00:00:00.000Z` : undefined);
 // Google `due` 문자열 → 'YYYY-MM-DD'
 const dueToIso = (due) => (due ? due.split('T')[0] : null);
 
+// Google position(사전식 문자열) 오름차순 비교. 누락(temp 등)은 맨 뒤로.
+// raw gTask(`position`)와 로컬 모델(`_position`) 양쪽 지원. (useTasks 로드·localDB 로드 공용)
+export function byPosition(a, b) {
+  const pa = a._position ?? a.position ?? '';
+  const pb = b._position ?? b.position ?? '';
+  if (!pa && !pb) return 0;
+  if (!pa) return 1;
+  if (!pb) return -1;
+  return pa < pb ? -1 : pa > pb ? 1 : 0;
+}
+
 // Google task → 로컬 상위 작업 형태(subtasks는 호출부에서 트리 조립).
 export function googleToTask(g, listId) {
   const { notes, date, time } = decodeNotes(g.notes || ''); // 시작일·시각·깨끗한 메모 분리

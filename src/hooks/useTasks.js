@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api/googleTasks';
 import { db, saveTasksToDb, loadTasksFromDb } from '../db/localDB';
-import { googleToTask, googleToSubtask, taskToGoogleBody, patchToGoogleBody } from '../utils/taskModel';
+import { googleToTask, googleToSubtask, taskToGoogleBody, patchToGoogleBody, byPosition } from '../utils/taskModel';
 
 const newId = () => `opt-${Date.now()}-${Math.random()}`;
 const isTemp = (id) => id.startsWith('opt-');
@@ -16,17 +16,7 @@ function lastRealId(items) {
   return undefined;
 }
 
-// Google position(사전식 문자열) 오름차순. 누락(temp 등)은 맨 뒤로.
-// raw gTask(`position`)와 로컬 모델(`_position`) 양쪽 모두 지원.
-// 로컬↔Google 매핑은 utils/taskModel.js로 일원화(googleToTask/googleToSubtask/taskToGoogleBody/patchToGoogleBody).
-function byPosition(a, b) {
-  const pa = a._position ?? a.position ?? '';
-  const pb = b._position ?? b.position ?? '';
-  if (!pa && !pb) return 0;
-  if (!pa) return 1;
-  if (!pb) return -1;
-  return pa < pb ? -1 : pa > pb ? 1 : 0;
-}
+// 로컬↔Google 매핑·정렬(byPosition)은 utils/taskModel.js로 일원화.
 
 // 오프라인 중 쌓인 pending ops를 순서대로 API에 재생
 async function flushPendingOps(token, listId) {

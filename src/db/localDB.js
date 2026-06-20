@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { byPosition } from '../utils/taskModel';
 
 export const db = new Dexie('TodayTasksDB');
 
@@ -41,16 +42,9 @@ export async function loadTasksFromDb() {
   const listId = lists[0].id;
 
   const all = await db.tasks.where('_listId').equals(listId).toArray();
-  // Dexie toArray()는 id순이라 순서 미보존 → Google position(사전식 문자열)으로 정렬.
-  const byPos = (a, b) => {
-    const pa = a._position ?? '', pb = b._position ?? '';
-    if (!pa && !pb) return 0;
-    if (!pa) return 1;
-    if (!pb) return -1;
-    return pa < pb ? -1 : pa > pb ? 1 : 0;
-  };
-  const parents = all.filter((t) => !t._parentId).sort(byPos);
-  const children = all.filter((t) => t._parentId).sort(byPos);
+  // Dexie toArray()는 id순이라 순서 미보존 → Google position(사전식 문자열)으로 정렬(taskModel.byPosition 공용).
+  const parents = all.filter((t) => !t._parentId).sort(byPosition);
+  const children = all.filter((t) => t._parentId).sort(byPosition);
 
   const tasks = parents.map((p) => ({
     id: p.id, text: p.text, done: p.done,
