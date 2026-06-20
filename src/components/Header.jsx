@@ -1,11 +1,12 @@
 // 상단 sticky 헤더 — 오프라인 배너 + 날짜 선택/다중선택 액션 행 + 진행률 바.
-import { Calendar as CalendarIcon, ChevronDown, Eye, EyeOff, Settings } from 'lucide-react';
+import { Calendar as CalendarIcon, Book, BookOpen, SquareCheck, SquareSlash, Settings } from 'lucide-react';
 import { C, Z } from '../styles/tokens';
 
 export default function Header({
-  isOffline, dateLabel, calendarOpen, onOpenCalendar,
+  isOffline, dateLabel, onOpenCalendar,
   selectionMode, selectedCount, onCopy, onDeleteSelected, onClearSelection,
-  hideCompleted, onToggleHideCompleted, viewMode, onToggleViewMode, onOpenSettings,
+  hideCompleted, onToggleHideCompleted, allSubsExpanded, hasExpandable, onToggleAllSubtasks,
+  viewMode, onToggleViewMode, onOpenSettings,
   completed, total, pct,
 }) {
   return (
@@ -20,7 +21,6 @@ export default function Header({
         <button onClick={onOpenCalendar} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', color: C.ink, minWidth: 0 }}>
           <CalendarIcon size={16} color={C.sage} style={{ flexShrink: 0 }} />
           <span style={{ fontSize: '19px', fontWeight: 600, whiteSpace: 'nowrap' }}>{dateLabel}</span>
-          <ChevronDown size={16} color={C.mute} style={{ transform: calendarOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
@@ -56,7 +56,14 @@ export default function Header({
                 title={hideCompleted ? '완료된 할일 보기' : '완료된 할일 숨기기'}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '10px', background: hideCompleted ? C.todayBg : 'transparent', border: hideCompleted ? 'none' : `1px solid ${C.border}`, cursor: 'pointer', color: hideCompleted ? C.sageDeep : C.label }}
               >
-                {hideCompleted ? <EyeOff size={14} /> : <Eye size={14} />}
+                {hideCompleted ? <SquareSlash size={14} /> : <SquareCheck size={14} />}
+              </button>
+              <button
+                onClick={hasExpandable ? onToggleAllSubtasks : undefined}
+                title={allSubsExpanded ? '하위할일 감추기' : '하위할일 보기'}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '10px', background: allSubsExpanded ? C.todayBg : 'transparent', border: allSubsExpanded ? 'none' : `1px solid ${C.border}`, cursor: hasExpandable ? 'pointer' : 'default', color: allSubsExpanded ? C.sageDeep : C.label, opacity: hasExpandable ? 1 : 0.4 }}
+              >
+                {allSubsExpanded ? <BookOpen size={14} /> : <Book size={14} />}
               </button>
               <button
                 onClick={onToggleViewMode}

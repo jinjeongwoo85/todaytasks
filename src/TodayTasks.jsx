@@ -31,7 +31,7 @@ export default function TodayTasks() {
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
-  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
+  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
 
   const latestStateRef = useRef({});
   const backEntryPushedRef = useRef(false);
@@ -90,6 +90,9 @@ export default function TodayTasks() {
 
   const allForDate = getOrderedTasks();
   const visibleTasks = allForDate.filter((t) => !hideCompleted || !t.done);
+  // 헤더 책 버튼: 화면에 보이는, 하위할일 있는 할일들의 펼침 일괄 토글
+  const expandableTasks = visibleTasks.filter((t) => t.subtasks.length > 0);
+  const allSubsExpanded = expandableTasks.length > 0 && expandableTasks.every((t) => t.expanded);
   const completed = allForDate.filter((t) => t.done).length;
   const total = allForDate.length;
   const pct = total === 0 ? 0 : Math.round((completed / total) * 100);
@@ -270,7 +273,6 @@ export default function TodayTasks() {
         <Header
           isOffline={isOffline}
           dateLabel={dateLabel()}
-          calendarOpen={calendarOpen}
           onOpenCalendar={openCalendar}
           selectionMode={selectedIds.size > 0}
           selectedCount={selectedIds.size}
@@ -279,6 +281,9 @@ export default function TodayTasks() {
           onClearSelection={() => setSelectedIds(new Set())}
           hideCompleted={hideCompleted}
           onToggleHideCompleted={() => setHideCompleted((v) => !v)}
+          allSubsExpanded={allSubsExpanded}
+          hasExpandable={expandableTasks.length > 0}
+          onToggleAllSubtasks={() => setExpandedFor(expandableTasks.map((t) => t.id), !allSubsExpanded)}
           viewMode={viewMode}
           onToggleViewMode={() => setViewMode((v) => (v === 'all' ? 'date' : 'all'))}
           onOpenSettings={() => setSettingsOpen(true)}

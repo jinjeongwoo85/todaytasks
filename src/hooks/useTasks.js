@@ -312,6 +312,12 @@ export function useTasks(accessToken) {
     setTasks((prev) => prev.map((t) => t.id === id ? { ...t, expanded: !t.expanded } : t));
   }, []);
 
+  // 여러 할일의 펼침 상태를 한 번에 설정(헤더의 "하위할일 일괄 보기/감추기"용)
+  const setExpandedFor = useCallback((ids, expanded) => {
+    const set = new Set(ids);
+    setTasks((prev) => prev.map((t) => set.has(t.id) ? { ...t, expanded } : t));
+  }, []);
+
   const addSubtask = useCallback(async (taskId, text) => {
     const trimmed = text.trim();
     if (!trimmed || !listId) return;
@@ -471,5 +477,5 @@ export function useTasks(accessToken) {
     }
   }, [accessToken, listId]);
 
-  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
+  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
 }
