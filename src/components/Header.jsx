@@ -1,6 +1,21 @@
 // 상단 sticky 헤더 — 오프라인 배너 + 날짜 선택/다중선택 액션 행 + 진행률 바.
-import { Calendar as CalendarIcon, Book, BookOpen, SquareCheck, SquareSlash, Settings } from 'lucide-react';
+import { Calendar as CalendarIcon, Book, BookOpen, SquareCheck, Settings } from 'lucide-react';
 import { C, Z } from '../styles/tokens';
+
+// 체크네모 전체에 사선(빗금)을 그어 "완료 숨김"을 나타내는 아이콘.
+// lucide SquareSlash는 사선이 작아, EyeOff처럼 아이콘 전체를 가로지르도록 직접 합성한다.
+// bg = 버튼 배경색(사선 양옆에 틈을 만들어 체크 획과 분리).
+function CheckSlash({ size = 14, bg }) {
+  const h = size + 6;
+  const line = { position: 'absolute', left: '50%', top: '50%', height: h, transform: 'translate(-50%, -50%) rotate(-45deg)' };
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size }}>
+      <SquareCheck size={size} />
+      <span style={{ ...line, width: '4px', background: bg }} />
+      <span style={{ ...line, width: '2px', background: 'currentColor' }} />
+    </span>
+  );
+}
 
 export default function Header({
   isOffline, dateLabel, onOpenCalendar,
@@ -56,7 +71,7 @@ export default function Header({
                 title={hideCompleted ? '완료된 할일 보기' : '완료된 할일 숨기기'}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '10px', background: hideCompleted ? C.todayBg : 'transparent', border: hideCompleted ? 'none' : `1px solid ${C.border}`, cursor: 'pointer', color: hideCompleted ? C.sageDeep : C.label }}
               >
-                {hideCompleted ? <SquareSlash size={14} /> : <SquareCheck size={14} />}
+                {hideCompleted ? <CheckSlash size={14} bg={C.todayBg} /> : <SquareCheck size={14} />}
               </button>
               <button
                 onClick={hasExpandable ? onToggleAllSubtasks : undefined}
