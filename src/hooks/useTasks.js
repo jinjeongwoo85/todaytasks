@@ -185,19 +185,20 @@ export function useTasks(accessToken) {
     return () => { cancelled = true; };
   }, [accessToken, refreshCount]);
 
-  const addTask = useCallback(async (text, dueDate, { notes = '', subtasks = [], date = null, time = null } = {}) => {
+  // 부모 1개 + 하위할일들 생성 공통 코어 (addTask·copyTask 공유).
+  // localParent = { text, dueDate, date, time, notes }, subTexts = 하위할일 텍스트 배열.
+  // 낙관적 UI + IndexedDB 반영 + (온라인: API 생성·temp→실제 id 재조정 | 오프라인: pendingOps 큐잉).
+  const createTaskWithSubtasks = useCallback(async (localParent, subTexts) => {
     if (!listId) return;
     const previous = lastRealId(tasksRef.current); // 기존 마지막 할일 뒤(맨 끝)에 삽입
     const oid = newId();
+    const { text, dueDate = null, date = null, time = null, notes = '' } = localParent;
     setTasks((prev) => [...prev, { id: oid, text, done: false, dueDate, date, time, notes, expanded: false, subtasks: [], _listId: listId, _parentId: null }]);
     db.tasks.put({ id: oid, _listId: listId, _parentId: null, text, done: false, dueDate, date, time, notes }).catch(() => {});
 
-    // 하위할일 텍스트만 추출(빈 항목 제외). 새 할일 모달이 draft에 쌓아둔 것.
-    const subTexts = subtasks.map((s) => (s.text || '').trim()).filter(Boolean);
-
     if (!navigator.onLine) {
       db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text, dueDate, notes, date, time }, createdAt: Date.now() }).catch(() => {});
-      // 오프라인: 임시 부모 id(oid) 밑으로 하위할일 큐잉 — 큐 재생 시 temp→실제 id 매핑됨(copyTask와 동일).
+      // 오프라인: 임시 부모 id(oid) 밑으로 하위할일 큐잉 — 큐 재생 시 temp→실제 id 매핑됨.
       for (const subText of subTexts) {
         const subOid = newId();
         setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: subText, done: false }] } : t));
@@ -232,6 +233,11 @@ export function useTasks(accessToken) {
       db.tasks.delete(oid).catch(() => {});
     }
   }, [accessToken, listId]);
+
+  const addTask = useCallback(async (text, dueDate, { notes = '', subtasks = [], date = null, time = null } = {}) => {
+    const subTexts = subtasks.map((s) => (s.text || '').trim()).filter(Boolean); // 새 할일 모달 draft의 하위할일
+    await createTaskWithSubtasks({ text, dueDate, notes, date, time }, subTexts);
+  }, [createTaskWithSubtasks]);
 
   const updateTask = useCallback(async (id, patch) => {
     // notes/date/time는 한 칸(notes)에 함께 인코딩되므로, 하나만 바뀌어도 "병합된 최신 상태"로
@@ -400,57 +406,10 @@ export function useTasks(accessToken) {
   }, [accessToken, listId]);
 
   const copyTask = useCallback(async (task, targetDueDate) => {
-    if (!listId) return;
-    const previous = lastRealId(tasksRef.current); // 복사본도 맨 끝에 삽입
-    const oid = newId();
-    const cTime = task.time ?? null; // 시각은 복사본에 유지(종료일은 대상 날짜로 바뀜, 시작일은 단일화)
-    setTasks((prev) => [...prev, {
-      id: oid, text: task.text, done: false,
-      dueDate: targetDueDate, date: null, time: cTime,
-      notes: task.notes || '',
-      expanded: false, subtasks: [],
-      _listId: listId, _parentId: null,
-    }]);
-    db.tasks.put({ id: oid, _listId: listId, _parentId: null, text: task.text, done: false, dueDate: targetDueDate, date: null, time: cTime, notes: task.notes || '' }).catch(() => {});
-
-    if (!navigator.onLine) {
-      db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text: task.text, dueDate: targetDueDate, notes: task.notes || '', date: null, time: cTime }, createdAt: Date.now() }).catch(() => {});
-      for (const sub of task.subtasks) {
-        const subOid = newId();
-        setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: sub.text, done: false }] } : t));
-        db.tasks.put({ id: subOid, _listId: listId, _parentId: oid, text: sub.text, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
-        db.pendingOps.add({ type: 'addSubtask', payload: { tempId: subOid, taskId: oid, text: sub.text }, createdAt: Date.now() }).catch(() => {});
-      }
-      return;
-    }
-
-    try {
-      const g = await api.createTask(accessToken, listId,
-        taskToGoogleBody({ text: task.text, dueDate: targetDueDate, notes: task.notes || '', date: null, time: cTime, done: false }),
-        { previous });
-      setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, id: g.id } : t));
-      db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text: task.text, done: false, dueDate: targetDueDate, date: null, time: cTime, notes: task.notes || '' })).catch(() => {});
-
-      let prevSub;
-      for (const sub of task.subtasks) {
-        const subOid = newId();
-        setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: sub.text, done: false }] } : t));
-        db.tasks.put({ id: subOid, _listId: listId, _parentId: g.id, text: sub.text, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
-        try {
-          const sg = await api.createTask(accessToken, listId, taskToGoogleBody({ text: sub.text, done: false }), { parent: g.id, previous: prevSub });
-          prevSub = sg.id;
-          setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: t.subtasks.map((s) => s.id === subOid ? { ...s, id: sg.id } : s) } : t));
-          db.tasks.delete(subOid).then(() => db.tasks.put({ id: sg.id, _listId: listId, _parentId: g.id, text: sub.text, done: false, dueDate: null, date: null, notes: '' })).catch(() => {});
-        } catch {
-          setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subOid) } : t));
-          db.tasks.delete(subOid).catch(() => {});
-        }
-      }
-    } catch {
-      setTasks((prev) => prev.filter((t) => t.id !== oid));
-      db.tasks.delete(oid).catch(() => {});
-    }
-  }, [accessToken, listId]);
+    // 복사: 종료일은 대상 날짜로, 시작일은 단일화(null), 시각은 유지, 완료상태는 리셋(false).
+    const subTexts = task.subtasks.map((s) => (s.text || '').trim()).filter(Boolean);
+    await createTaskWithSubtasks({ text: task.text, dueDate: targetDueDate, notes: task.notes || '', date: null, time: task.time ?? null }, subTexts);
+  }, [createTaskWithSubtasks]);
 
   return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
 }
