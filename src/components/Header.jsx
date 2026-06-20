@@ -11,8 +11,8 @@ function CheckSlash({ size = 14, bg }) {
   return (
     <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size }}>
       <SquareCheck size={size} />
-      <span style={{ ...line, width: '4px', background: bg }} />
-      <span style={{ ...line, width: '2px', background: 'currentColor' }} />
+      <span style={{ ...line, width: '3px', background: bg }} />
+      <span style={{ ...line, width: '1.5px', background: 'currentColor' }} />
     </span>
   );
 }
