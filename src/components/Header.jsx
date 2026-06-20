@@ -1,6 +1,7 @@
 // 상단 sticky 헤더 — 오프라인 배너 + 날짜 선택/다중선택 액션 행 + 진행률 바.
 import { Calendar as CalendarIcon, Book, BookOpen, SquareCheck, Settings } from 'lucide-react';
 import { C, Z } from '../styles/tokens';
+import ProgressBar from './ProgressBar';
 
 // 체크네모 전체에 사선(빗금)을 그어 "완료 숨김"을 나타내는 아이콘.
 // lucide SquareSlash는 사선이 작아, EyeOff처럼 아이콘 전체를 가로지르도록 직접 합성한다.
@@ -112,9 +113,7 @@ export default function Header({
             {String(completed).padStart(2, '0')} / {String(total).padStart(2, '0')}
           </span>
         </div>
-        <div style={{ height: '6px', background: C.borderSoft, width: '100%' }}>
-          <div className="progress-fill" style={{ height: '100%', width: `${pct}%`, background: C.sage }} />
-        </div>
+        <ProgressBar pct={pct} />
       </div>
     </div>
   );

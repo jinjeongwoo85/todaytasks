@@ -5,6 +5,7 @@ import { useState, useMemo } from 'react';
 import { Search, Check, X } from 'lucide-react';
 import { C } from '../styles/tokens';
 import BottomSheet from './BottomSheet';
+import ProgressBar from './ProgressBar';
 import { rowDateLabel, formatDateY } from '../utils/date';
 
 // 기간 매치용 — 할일의 [시작..종료] 구간(없으면 종료/시작 단일). 날짜 없으면 null.
@@ -211,11 +212,7 @@ function Section({ title, done, total, children }) {
           </span>
         )}
       </div>
-      {hasBar && (
-        <div style={{ height: '6px', background: C.borderSoft, width: '100%', marginBottom: '4px' }}>
-          <div style={{ height: '100%', width: `${pct}%`, background: C.sage }} />
-        </div>
-      )}
+      {hasBar && <ProgressBar pct={pct} marginBottom="4px" />}
       {!hasBar && <div style={{ borderBottom: `1px solid ${C.borderSoft}`, marginBottom: '2px' }} />}
       {children}
     </div>
