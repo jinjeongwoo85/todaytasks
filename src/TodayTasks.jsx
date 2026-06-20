@@ -72,9 +72,21 @@ export default function TodayTasks() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
-  // tasks는 로드 시 Google position순으로 정렬됨 → 여기선 viewMode/날짜 필터만.
-  const getOrderedTasks = () =>
-    viewMode === 'all' ? tasks : tasks.filter((t) => isTaskOnDate(t, selectedDate));
+  // tasks는 로드 시 Google position순으로 정렬됨.
+  // - 날짜 뷰: 해당 날짜 필터만 (position순 유지).
+  // - 전체 뷰: 종료일 오름차순(빠른 날짜가 위 → 아래로 갈수록 미래). 종료일이 같으면
+  //   종료시각과 무관하게 기존 position 순서 유지(sort가 stable → 동률에 0 반환). 종료일 없는 건 맨 뒤.
+  const getOrderedTasks = () => {
+    if (viewMode !== 'all') return tasks.filter((t) => isTaskOnDate(t, selectedDate));
+    return [...tasks].sort((a, b) => {
+      const da = a.dueDate || '';
+      const db = b.dueDate || '';
+      if (da === db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da < db ? -1 : 1;
+    });
+  };
 
   const allForDate = getOrderedTasks();
   const visibleTasks = allForDate.filter((t) => !hideCompleted || !t.done);

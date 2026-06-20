@@ -69,10 +69,10 @@ export const isTaskOnDate = (t, iso) => {
 };
 
 // 행에 표시할 날짜 라벨(기본 날짜 = 종료일 기준). 기간은 시작일을 '~'로 대체.
-// 시각은 있으면 항상 뒤에 붙인다(기간/단일 공통).
-//  - 기간(시작≠종료): '~종료일' (종료일=오늘이면 '~오늘').  예) ~6.19 / ~6.19 18:00 / ~오늘 18:00
-//  - 단일 + 종료일=오늘: '오늘'.                            예) 오늘 / 오늘 18:00
-//  - 단일 + 종료일≠오늘: '6.22(화)'.                        예) 6.22(화) / 6.22(화) 18:00
+// 시각은 있으면 항상 뒤에 붙인다(기간/단일 공통). 종료일=오늘인 경우만 요일 없이 '오늘'.
+//  - 기간(시작≠종료): '~종료일(요일)' (종료일=오늘이면 '~오늘').  예) ~6.19(목) / ~6.20(토) 18:00 / ~오늘 18:00
+//  - 단일 + 종료일=오늘: '오늘'.                                 예) 오늘 / 오늘 18:00
+//  - 단일 + 종료일≠오늘: '6.22(화)'.                            예) 6.22(화) / 6.22(화) 18:00
 //  - 종료일 없음: null
 export const rowDateLabel = (t, today = todayISO()) => {
   const end = t.dueDate;
@@ -80,7 +80,7 @@ export const rowDateLabel = (t, today = todayISO()) => {
   const isRange = t.date && t.date !== end && t.date <= end;
   const time = t.time ? ` ${formatTime(t.time)}` : '';
   if (isRange) {
-    const endLabel = end === today ? '오늘' : formatShort(end);
+    const endLabel = end === today ? '오늘' : formatDate(end);
     return `~${endLabel}${time}`;
   }
   if (end === today) return `오늘${time}`;
