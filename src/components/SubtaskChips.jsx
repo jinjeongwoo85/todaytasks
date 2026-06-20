@@ -3,9 +3,10 @@
 //  - 롱프레스 후 드래그 = 실시간 재배치(useReorderDragHorizontal). 잡은 칩은 손가락을 따라다니는
 //    floating 사본이 되고, 원래 자리엔 빈자리(placeholder)가 남으며, 나머지 칩이 즉시(스냅) 비켜준다.
 //    (슬라이드 애니메이션은 의도적으로 없음 — 측정 race로 칩이 튀던 버그를 원천 차단.)
-import { Plus, Check, X, CornerDownRight } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { C, Z } from '../styles/tokens';
 import { useReorderDragHorizontal } from '../hooks/useReorderDragHorizontal';
+import SubtaskAddRow from './SubtaskAddRow';
 
 export default function SubtaskChips({ subtasks, onToggle, onRemove, draft, onDraftChange, onAdd, onReorder }) {
   const drag = useReorderDragHorizontal(subtasks, onReorder);
@@ -52,19 +53,7 @@ export default function SubtaskChips({ subtasks, onToggle, onRemove, draft, onDr
         })}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '8px' }}>
-        <CornerDownRight size={14} color={C.faint} />
-        <input
-          value={draft}
-          onChange={(e) => onDraftChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') onAdd(); }}
-          placeholder="하위 할 일 추가"
-          style={{ flex: 1, border: 'none', borderBottom: `1px dotted ${C.border}`, background: 'transparent', outline: 'none', fontSize: '13px', color: C.ink, padding: '2px 0', fontFamily: 'inherit' }}
-        />
-        <button onClick={onAdd} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.sage, padding: '2px' }} aria-label="하위 할 일 추가">
-          <Plus size={15} />
-        </button>
-      </div>
+      <SubtaskAddRow draft={draft} onDraftChange={onDraftChange} onAdd={onAdd} />
     </div>
   );
 }

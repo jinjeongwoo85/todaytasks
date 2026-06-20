@@ -3,9 +3,10 @@
 //   - 측정은 바깥 래퍼(data-subtask-id, 변형 X), 시각 이동은 안쪽 래퍼 transform만.
 // 탭: 앞 동그라미 = 완료 토글, 글자(뒷부분) = 제목 인라인 편집(롱프레스 직후 탭은 무시).
 import { useState } from 'react';
-import { Plus, Check, X, CornerDownRight } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { C } from '../styles/tokens';
 import { useReorderDragVertical } from '../hooks/useReorderDragVertical';
+import SubtaskAddRow from './SubtaskAddRow';
 
 export default function SubtaskList({ subtasks, onToggle, onRemove, onUpdate, draft, onDraftChange, onAdd, compact, onReorder }) {
   const drag = useReorderDragVertical(subtasks, onReorder);
@@ -112,19 +113,7 @@ export default function SubtaskList({ subtasks, onToggle, onRemove, onUpdate, dr
         })}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '6px' }}>
-        <CornerDownRight size={14} color={C.faint} />
-        <input
-          value={draft}
-          onChange={(e) => onDraftChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') onAdd(); }}
-          placeholder="하위 할 일 추가"
-          style={{ flex: 1, border: 'none', borderBottom: `1px dotted ${C.border}`, background: 'transparent', outline: 'none', fontSize: '13px', color: C.ink, padding: '2px 0', fontFamily: 'inherit' }}
-        />
-        <button onClick={onAdd} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.sage, padding: '2px' }} aria-label="하위 할 일 추가">
-          <Plus size={15} />
-        </button>
-      </div>
+      <SubtaskAddRow draft={draft} onDraftChange={onDraftChange} onAdd={onAdd} paddingTop="6px" />
     </div>
   );
 }
