@@ -22,7 +22,6 @@ export default function SubtaskChips({ subtasks, onToggle, onRemove, draft, onDr
   const ordered = (drag.displayOrder.length > 0 ? drag.displayOrder.map((id) => byId[id]).filter(Boolean) : subtasks);
 
   const draggingId = drag.drag ? drag.drag.dragId : null;
-  const draggingSub = draggingId ? byId[draggingId] : null;
 
   return (
     <div>
@@ -32,32 +31,26 @@ export default function SubtaskChips({ subtasks, onToggle, onRemove, draft, onDr
       >
         {ordered.map((s) => {
           const isDragged = s.id === draggingId;
+          // 잡은 칩도 항상 <Chip>을 렌더(요소 교체 금지) → 같은 DOM 노드가 유지되어
+          // touchstart로 묶인 터치 캡처가 끊기지 않음(touchmove/touchend 계속 전달).
+          // 바깥 래퍼는 칩이 fixed로 빠진 자리를 잡는 빈자리(gap) 역할.
+          const wrapperStyle = isDragged
+            ? { width: drag.drag.w, height: drag.drag.h, borderRadius: '999px', border: `1px dashed ${C.border}`, boxSizing: 'border-box' }
+            : undefined;
+          const chipStyle = isDragged
+            ? {
+                position: 'fixed', left: drag.drag.fx, top: drag.drag.fy, width: drag.drag.w,
+                zIndex: Z.sheet, transform: 'scale(1.05)', transformOrigin: 'center',
+                boxShadow: '0 8px 22px rgba(35,35,35,0.22)', boxSizing: 'border-box',
+              }
+            : undefined;
           return (
-            <div key={s.id} data-subtask-id={s.id}>
-              {isDragged ? (
-                // 빈자리(placeholder) — floating 사본이 떠 있는 동안 자리만 차지
-                <div style={{ width: drag.drag.w, height: drag.drag.h, borderRadius: '999px', border: `1px dashed ${C.border}`, background: 'transparent', boxSizing: 'border-box' }} />
-              ) : (
-                <Chip s={s} onClick={() => handleChipClick(s)} onRemove={() => onRemove(s.id)} />
-              )}
+            <div key={s.id} data-subtask-id={s.id} style={wrapperStyle}>
+              <Chip s={s} onClick={() => handleChipClick(s)} onRemove={() => onRemove(s.id)} dragging={isDragged} style={chipStyle} />
             </div>
           );
         })}
       </div>
-
-      {/* 손가락을 따라다니는 floating 사본 */}
-      {draggingSub && (
-        <div
-          style={{
-            position: 'fixed', left: drag.drag.fx, top: drag.drag.fy, width: drag.drag.w,
-            zIndex: Z.sheet, pointerEvents: 'none',
-            transform: 'scale(1.05)', transformOrigin: 'center',
-            boxShadow: '0 8px 22px rgba(35,35,35,0.22)', borderRadius: '999px',
-          }}
-        >
-          <Chip s={draggingSub} dragging />
-        </div>
-      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '8px' }}>
         <CornerDownRight size={14} color={C.faint} />
@@ -76,8 +69,8 @@ export default function SubtaskChips({ subtasks, onToggle, onRemove, draft, onDr
   );
 }
 
-// 칩 본체 — 동그라미(완료 표시) + 텍스트 + ✕. dragging이면 ✕ 숨김.
-function Chip({ s, onClick, onRemove, dragging }) {
+// 칩 본체 — 동그라미(완료 표시) + 텍스트 + ✕. dragging이면 ✕ 숨김 + style(floating) 머지.
+function Chip({ s, onClick, onRemove, dragging, style }) {
   return (
     <div
       onClick={onClick}
@@ -88,6 +81,7 @@ function Chip({ s, onClick, onRemove, dragging }) {
         background: s.done ? C.todayBg : C.surface,
         cursor: dragging ? 'grabbing' : 'pointer',
         WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none',
+        ...style,
       }}
     >
       <span
