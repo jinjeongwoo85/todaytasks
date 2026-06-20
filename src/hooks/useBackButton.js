@@ -26,9 +26,16 @@ export function useBackButton(layers) {
   useEffect(() => {
     history.replaceState({ appBase: true }, '');
     const onPop = () => {
-      pushedRef.current = false; // 레이어가 남아 있으면 위 effect가 다시 push
-      const layer = layersRef.current.find((l) => l.open);
-      if (layer) layer.close();
+      const open = layersRef.current.filter((l) => l.open); // 우선순위 순(배열 순서)
+      if (open.length === 0) { pushedRef.current = false; return; }
+      open[0].close(); // 가장 위(우선순위 높은) 레이어만 닫기
+      if (open.length > 1) {
+        // 닫은 뒤에도 레이어가 남음 → 다음 뒤로가기를 위해 항목 재push.
+        // (이 경우 anyOpen이 true→true라 위 push effect가 다시 돌지 않으므로 여기서 직접 확보)
+        history.pushState({ backIntercept: true }, '');
+      } else {
+        pushedRef.current = false; // 마지막 레이어 닫음 → 다음 오픈 시 effect가 다시 push
+      }
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
