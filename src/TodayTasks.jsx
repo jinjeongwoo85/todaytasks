@@ -10,6 +10,7 @@ import Header from './components/Header';
 import TaskList from './components/TaskList';
 import CalendarSheet from './components/CalendarSheet';
 import SettingsSheet from './components/SettingsSheet';
+import SearchSheet from './components/SearchSheet';
 import TaskDetailModal from './components/TaskDetailModal';
 import ClockTimePicker from './components/ClockTimePicker';
 import LoginScreen from './components/LoginScreen';
@@ -26,6 +27,7 @@ export default function TodayTasks() {
   const [newTaskDraft, setNewTaskDraft] = useState(null);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [datePickerTask, setDatePickerTask] = useState(null);
   const [chipTimeOpen, setChipTimeOpen] = useState(false);
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
@@ -37,10 +39,10 @@ export default function TodayTasks() {
   const backEntryPushedRef = useRef(false);
 
   // anyLayerOpen is a boolean primitive — safe as useEffect dependency
-  const anyLayerOpen = calendarOpen || settingsOpen || !!datePickerTask || copyPickerOpen ||
+  const anyLayerOpen = calendarOpen || settingsOpen || searchOpen || !!datePickerTask || copyPickerOpen ||
     selectedIds.size > 0 || editingTaskId !== null || newTaskDraft !== null;
 
-  latestStateRef.current = { settingsOpen, copyPickerOpen, datePickerTask, calendarOpen, selectedIds, editingTaskId, newTaskDraft };
+  latestStateRef.current = { settingsOpen, searchOpen, copyPickerOpen, datePickerTask, calendarOpen, selectedIds, editingTaskId, newTaskDraft };
 
   // Push a history entry the moment the first layer opens so the back button
   // has something to pop. Reset when all layers close so the next open re-pushes.
@@ -62,6 +64,7 @@ export default function TodayTasks() {
       const s = latestStateRef.current;
       if (s.editingTaskId !== null) { setEditingTaskId(null); setModalSubDraft(''); return; }
       if (s.newTaskDraft !== null) { saveNewTaskRef.current(); return; }
+      if (s.searchOpen) { setSearchOpen(false); return; }
       if (s.settingsOpen) { setSettingsOpen(false); return; }
       if (s.copyPickerOpen) { setCopyPickerOpen(false); return; }
       if (s.datePickerTask) { setDatePickerTask(null); return; }
@@ -355,7 +358,18 @@ export default function TodayTasks() {
       {settingsOpen && (
         <SettingsSheet
           onClose={() => setSettingsOpen(false)}
+          onOpenSearch={() => { setSettingsOpen(false); setSearchOpen(true); }}
           onSignOut={() => { signOut(); setSettingsOpen(false); }}
+        />
+      )}
+
+      {searchOpen && (
+        <SearchSheet
+          tasks={tasks}
+          onClose={() => setSearchOpen(false)}
+          onPick={(id) => { setSearchOpen(false); setEditingTaskId(id); }}
+          onToggleTask={toggleTask}
+          onToggleSubtask={toggleSubtask}
         />
       )}
 

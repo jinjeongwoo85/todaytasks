@@ -39,6 +39,12 @@ export const formatDate = (iso) => {
   return `${d.getMonth() + 1}.${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
 };
 
+// 2026.6.16(화) — 연도 포함(검색 기간 표시용)
+export const formatDateY = (iso) => {
+  const d = isoToDate(iso);
+  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
+};
+
 // 6.16
 export const formatShort = (iso) => {
   const d = isoToDate(iso);
