@@ -1,8 +1,8 @@
 // 하위 할 일 — 가로 칩 배치 (목록화면 전용). 줄바꿈(flex-wrap)으로 넘침 처리.
 //  - 칩 본체 탭 = 완료 토글, 칩 안 ✕ = 삭제 (제목 수정은 상세 모달에서만).
 //  - 롱프레스 후 드래그 = 실시간 재배치(useReorderDragHorizontal). 잡은 칩은 손가락을 따라다니는
-//    floating 사본이 되고, 원래 자리엔 빈자리(placeholder)가 남으며, 나머지 칩이 FLIP로 비켜준다.
-import { useRef, useLayoutEffect } from 'react';
+//    floating 사본이 되고, 원래 자리엔 빈자리(placeholder)가 남으며, 나머지 칩이 즉시(스냅) 비켜준다.
+//    (슬라이드 애니메이션은 의도적으로 없음 — 측정 race로 칩이 튀던 버그를 원천 차단.)
 import { Plus, Check, X, CornerDownRight } from 'lucide-react';
 import { C, Z } from '../styles/tokens';
 import { useReorderDragHorizontal } from '../hooks/useReorderDragHorizontal';
@@ -24,35 +24,6 @@ export default function SubtaskChips({ subtasks, onToggle, onRemove, draft, onDr
   const draggingId = drag.drag ? drag.drag.dragId : null;
   const draggingSub = draggingId ? byId[draggingId] : null;
 
-  // FLIP — displayOrder 변경 시 칩이 새 자리로 부드럽게 미끄러지도록.
-  const nodesRef = useRef(new Map()); // id -> DOM 노드(측정 래퍼)
-  const prevRectsRef = useRef(new Map());
-  useLayoutEffect(() => {
-    if (!draggingId) { prevRectsRef.current = new Map(); return; }
-    const last = new Map();
-    nodesRef.current.forEach((node, id) => {
-      if (node) last.set(id, node.getBoundingClientRect());
-    });
-    last.forEach((lr, id) => {
-      if (id === draggingId) return; // 잡은 칩(placeholder)은 스냅
-      const fr = prevRectsRef.current.get(id);
-      if (!fr) return;
-      const dx = fr.left - lr.left;
-      const dy = fr.top - lr.top;
-      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
-      const node = nodesRef.current.get(id);
-      if (!node) return;
-      node.style.transition = 'none';
-      node.style.transform = `translate(${dx}px, ${dy}px)`;
-      // 다음 프레임에 0으로 → 새 자리로 슬라이드
-      requestAnimationFrame(() => {
-        node.style.transition = 'transform 0.18s ease';
-        node.style.transform = '';
-      });
-    });
-    prevRectsRef.current = last;
-  });
-
   return (
     <div>
       <div
@@ -62,11 +33,7 @@ export default function SubtaskChips({ subtasks, onToggle, onRemove, draft, onDr
         {ordered.map((s) => {
           const isDragged = s.id === draggingId;
           return (
-            <div
-              key={s.id}
-              data-subtask-id={s.id}
-              ref={(el) => { if (el) nodesRef.current.set(s.id, el); else nodesRef.current.delete(s.id); }}
-            >
+            <div key={s.id} data-subtask-id={s.id}>
               {isDragged ? (
                 // 빈자리(placeholder) — floating 사본이 떠 있는 동안 자리만 차지
                 <div style={{ width: drag.drag.w, height: drag.drag.h, borderRadius: '999px', border: `1px dashed ${C.border}`, background: 'transparent', boxSizing: 'border-box' }} />
