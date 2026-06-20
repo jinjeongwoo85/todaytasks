@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Plus } from 'lucide-react';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useTasks } from './hooks/useTasks';
@@ -6,6 +6,7 @@ import { useTaskListGestures } from './hooks/useTaskListGestures';
 import { C } from './styles/tokens';
 import { toISO, tomorrowISO, formatDate, isTaskOnDate, monthStartOf } from './utils/date';
 import { useToday } from './hooks/useToday';
+import { useBackButton } from './hooks/useBackButton';
 import { newId } from './utils/id';
 import Header from './components/Header';
 import TaskList from './components/TaskList';
@@ -37,45 +38,8 @@ export default function TodayTasks() {
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
   const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
 
-  const latestStateRef = useRef({});
-  const backEntryPushedRef = useRef(false);
-
-  // anyLayerOpen is a boolean primitive — safe as useEffect dependency
-  const anyLayerOpen = calendarOpen || settingsOpen || searchOpen || !!datePickerTask || copyPickerOpen ||
-    selectedIds.size > 0 || editingTaskId !== null || newTaskDraft !== null;
-
-  latestStateRef.current = { settingsOpen, searchOpen, copyPickerOpen, datePickerTask, calendarOpen, selectedIds, editingTaskId, newTaskDraft };
-
-  // Push a history entry the moment the first layer opens so the back button
-  // has something to pop. Reset when all layers close so the next open re-pushes.
-  useEffect(() => {
-    if (anyLayerOpen && !backEntryPushedRef.current) {
-      history.pushState({ backIntercept: true }, '');
-      backEntryPushedRef.current = true;
-    } else if (!anyLayerOpen) {
-      backEntryPushedRef.current = false;
-    }
-  }, [anyLayerOpen]);
-
-  // Register popstate once on mount. Reads latest state via ref — no stale closures.
-  useEffect(() => {
-    history.replaceState({ appBase: true }, '');
-    const onPop = () => {
-      // Reset so anyLayerOpen effect can re-push if layers remain open
-      backEntryPushedRef.current = false;
-      const s = latestStateRef.current;
-      if (s.editingTaskId !== null) { setEditingTaskId(null); setModalSubDraft(''); return; }
-      if (s.newTaskDraft !== null) { saveNewTaskRef.current(); return; }
-      if (s.searchOpen) { setSearchOpen(false); return; }
-      if (s.settingsOpen) { setSettingsOpen(false); return; }
-      if (s.copyPickerOpen) { setCopyPickerOpen(false); return; }
-      if (s.datePickerTask) { setDatePickerTask(null); return; }
-      if (s.calendarOpen) { setCalendarOpen(false); return; }
-      if (s.selectedIds.size > 0) { setSelectedIds(new Set()); return; }
-    };
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  // 뒤로가기/제스처 back → 가장 위 레이어만 닫기. 우선순위·동작은 아래 useBackButton(layers)로 위임
+  // (saveNewTaskRef가 정의된 뒤에서 배선 — 파일 하단 참고).
 
   // tasks는 로드 시 Google position순으로 정렬됨.
   // - 날짜 뷰: 해당 날짜 필터만 (position순 유지).
@@ -206,6 +170,18 @@ export default function TodayTasks() {
   // popstate 핸들러는 마운트 시 1회 등록되므로 최신 saveNewTask를 ref로 노출(stale 방지).
   const saveNewTaskRef = useRef(saveNewTask);
   saveNewTaskRef.current = saveNewTask;
+
+  // 뒤로가기 닫기 우선순위(높은 순): 모달 → 새 할일(저장) → 검색 → 설정 → 복사 → 날짜선택 → 캘린더 → 선택모드
+  useBackButton([
+    { open: editingTaskId !== null, close: () => { setEditingTaskId(null); setModalSubDraft(''); } },
+    { open: newTaskDraft !== null, close: () => saveNewTaskRef.current() },
+    { open: searchOpen, close: () => setSearchOpen(false) },
+    { open: settingsOpen, close: () => setSettingsOpen(false) },
+    { open: copyPickerOpen, close: () => setCopyPickerOpen(false) },
+    { open: !!datePickerTask, close: () => setDatePickerTask(null) },
+    { open: calendarOpen, close: () => setCalendarOpen(false) },
+    { open: selectedIds.size > 0, close: () => setSelectedIds(new Set()) },
+  ]);
 
   // 새 할일 모달의 하위할일은 서버 id가 아직 없으므로 draft에만 쌓아두고, 저장 시 함께 생성된다.
   const addDraftSubtask = () => {
