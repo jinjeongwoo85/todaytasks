@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api/googleTasks';
 import { db, saveTasksToDb, loadTasksFromDb } from '../db/localDB';
-import { encodeNotes, decodeNotes } from '../utils/taskNotes';
+import { googleToTask, googleToSubtask, taskToGoogleBody, patchToGoogleBody } from '../utils/taskModel';
 
 const newId = () => `opt-${Date.now()}-${Math.random()}`;
 const isTemp = (id) => id.startsWith('opt-');
@@ -16,26 +16,9 @@ function lastRealId(items) {
   return undefined;
 }
 
-function gToLocal(gTask, listId) {
-  const { notes, date, time } = decodeNotes(gTask.notes || ''); // 시작일·시각·깨끗한 메모 분리
-  return {
-    id: gTask.id,
-    text: gTask.title || '',
-    done: gTask.status === 'completed',
-    dueDate: gTask.due ? gTask.due.split('T')[0] : null, // 종료일 = Google due(네이티브)
-    date,                                                 // 시작일 = notes 마커
-    time,                                                 // 시각  = notes 마커
-    notes,
-    expanded: false,
-    subtasks: [],
-    _listId: listId,
-    _parentId: gTask.parent || null,
-    _position: gTask.position || '',
-  };
-}
-
 // Google position(사전식 문자열) 오름차순. 누락(temp 등)은 맨 뒤로.
 // raw gTask(`position`)와 로컬 모델(`_position`) 양쪽 모두 지원.
+// 로컬↔Google 매핑은 utils/taskModel.js로 일원화(googleToTask/googleToSubtask/taskToGoogleBody/patchToGoogleBody).
 function byPosition(a, b) {
   const pa = a._position ?? a.position ?? '';
   const pb = b._position ?? b.position ?? '';
@@ -43,10 +26,6 @@ function byPosition(a, b) {
   if (!pa) return 1;
   if (!pb) return -1;
   return pa < pb ? -1 : pa > pb ? 1 : 0;
-}
-
-function dueParam(iso) {
-  return iso ? `${iso}T00:00:00.000Z` : undefined;
 }
 
 // 오프라인 중 쌓인 pending ops를 순서대로 API에 재생
@@ -66,12 +45,9 @@ async function flushPendingOps(token, listId) {
       const { payload: p } = op;
 
       if (op.type === 'addTask') {
-        const g = await api.createTask(token, listId, {
-          title: p.text,
-          due: dueParam(p.dueDate),
-          notes: encodeNotes(p.notes || '', { date: p.date, time: p.time }), // 시작일·시각 마커
-          status: 'needsAction',
-        }, { previous: lastTaskId });
+        const g = await api.createTask(token, listId,
+          taskToGoogleBody({ text: p.text, dueDate: p.dueDate, notes: p.notes || '', date: p.date, time: p.time, done: false }),
+          { previous: lastTaskId });
         lastTaskId = g.id;
         tempIdMap[p.tempId] = g.id;
         await db.tasks.delete(p.tempId);
@@ -89,7 +65,7 @@ async function flushPendingOps(token, listId) {
 
       } else if (op.type === 'addSubtask') {
         const parentId = resolve(p.taskId);
-        const g = await api.createTask(token, listId, { title: p.text, status: 'needsAction' }, { parent: parentId, previous: lastSubByParent[parentId] });
+        const g = await api.createTask(token, listId, taskToGoogleBody({ text: p.text, done: false }), { parent: parentId, previous: lastSubByParent[parentId] });
         lastSubByParent[parentId] = g.id;
         tempIdMap[p.tempId] = g.id;
         await db.tasks.delete(p.tempId);
@@ -176,11 +152,12 @@ export function useTasks(accessToken) {
           const parents = gTasks.filter((t) => !t.parent).sort(byPosition);
           const children = gTasks.filter((t) => t.parent);
           const local = parents.map((pt) => ({
-            ...gToLocal(pt, lid),
+            ...googleToTask(pt, lid),
+            _position: pt.position || '', // 매퍼는 필드 변환만 — 정렬용 _position은 여기서 부착
             subtasks: children
               .filter((ct) => ct.parent === pt.id)
               .sort(byPosition)
-              .map((ct) => ({ id: ct.id, text: ct.title || '', done: ct.status === 'completed', dueDate: ct.due ? ct.due.split('T')[0] : null, notes: ct.notes || '', _position: ct.position || '' })),
+              .map((ct) => ({ ...googleToSubtask(ct), _position: ct.position || '' })),
           }));
 
           if (!cancelled) {
@@ -230,7 +207,7 @@ export function useTasks(accessToken) {
       return;
     }
     try {
-      const g = await api.createTask(accessToken, listId, { title: text, due: dueParam(dueDate), notes: encodeNotes(notes, { date, time }), status: 'needsAction' }, { previous });
+      const g = await api.createTask(accessToken, listId, taskToGoogleBody({ text, dueDate, notes, date, time, done: false }), { previous });
       setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, id: g.id } : t));
       db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text, done: false, dueDate, date, time, notes })).catch(() => {});
 
@@ -241,7 +218,7 @@ export function useTasks(accessToken) {
         setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: subText, done: false }] } : t));
         db.tasks.put({ id: subOid, _listId: listId, _parentId: g.id, text: subText, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
         try {
-          const sg = await api.createTask(accessToken, listId, { title: subText, status: 'needsAction' }, { parent: g.id, previous: prevSub });
+          const sg = await api.createTask(accessToken, listId, taskToGoogleBody({ text: subText, done: false }), { parent: g.id, previous: prevSub });
           prevSub = sg.id;
           setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: t.subtasks.map((s) => s.id === subOid ? { ...s, id: sg.id } : s) } : t));
           db.tasks.delete(subOid).then(() => db.tasks.put({ id: sg.id, _listId: listId, _parentId: g.id, text: subText, done: false, dueDate: null, date: null, notes: '' })).catch(() => {});
@@ -267,13 +244,11 @@ export function useTasks(accessToken) {
     db.tasks.update(id, patch).catch(() => {});
     if (!listId) return;
 
-    const gPatch = {};
-    if ('text' in patch) gPatch.title = patch.text;
-    if ('done' in patch) gPatch.status = patch.done ? 'completed' : 'needsAction';
-    if ('dueDate' in patch) gPatch.due = dueParam(patch.dueDate) ?? null;
-    if ('notes' in patch || 'date' in patch || 'time' in patch) {
-      gPatch.notes = encodeNotes(merged.notes || '', { date: merged.date, time: merged.time });
-    }
+    // notes/date/time 중 하나라도 바뀌면 병합된 최신값으로 재인코딩(나머지 유실 방지) → patchToGoogleBody에 merged 전달.
+    const touchesNotes = 'notes' in patch || 'date' in patch || 'time' in patch;
+    const gPatch = patchToGoogleBody(
+      touchesNotes ? { ...patch, notes: merged.notes, date: merged.date, time: merged.time } : patch
+    );
     if (Object.keys(gPatch).length === 0) return;
 
     if (!navigator.onLine) {
@@ -450,9 +425,9 @@ export function useTasks(accessToken) {
     }
 
     try {
-      const g = await api.createTask(accessToken, listId, {
-        title: task.text, due: dueParam(targetDueDate), notes: encodeNotes(task.notes || '', { date: null, time: cTime }), status: 'needsAction',
-      }, { previous });
+      const g = await api.createTask(accessToken, listId,
+        taskToGoogleBody({ text: task.text, dueDate: targetDueDate, notes: task.notes || '', date: null, time: cTime, done: false }),
+        { previous });
       setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, id: g.id } : t));
       db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text: task.text, done: false, dueDate: targetDueDate, date: null, time: cTime, notes: task.notes || '' })).catch(() => {});
 
@@ -462,7 +437,7 @@ export function useTasks(accessToken) {
         setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: [...t.subtasks, { id: subOid, text: sub.text, done: false }] } : t));
         db.tasks.put({ id: subOid, _listId: listId, _parentId: g.id, text: sub.text, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
         try {
-          const sg = await api.createTask(accessToken, listId, { title: sub.text, status: 'needsAction' }, { parent: g.id, previous: prevSub });
+          const sg = await api.createTask(accessToken, listId, taskToGoogleBody({ text: sub.text, done: false }), { parent: g.id, previous: prevSub });
           prevSub = sg.id;
           setTasks((prev) => prev.map((t) => t.id === g.id ? { ...t, subtasks: t.subtasks.map((s) => s.id === subOid ? { ...s, id: sg.id } : s) } : t));
           db.tasks.delete(subOid).then(() => db.tasks.put({ id: sg.id, _listId: listId, _parentId: g.id, text: sub.text, done: false, dueDate: null, date: null, notes: '' })).catch(() => {});
