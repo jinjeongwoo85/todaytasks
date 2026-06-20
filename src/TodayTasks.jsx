@@ -4,7 +4,8 @@ import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useTasks } from './hooks/useTasks';
 import { useTaskListGestures } from './hooks/useTaskListGestures';
 import { C } from './styles/tokens';
-import { toISO, todayISO, tomorrowISO, formatDate, isTaskOnDate, monthStartOf } from './utils/date';
+import { toISO, tomorrowISO, formatDate, isTaskOnDate, monthStartOf } from './utils/date';
+import { useToday } from './hooks/useToday';
 import { newId } from './utils/id';
 import Header from './components/Header';
 import TaskList from './components/TaskList';
@@ -16,10 +17,11 @@ import ClockTimePicker from './components/ClockTimePicker';
 import LoginScreen from './components/LoginScreen';
 
 export default function TodayTasks() {
+  const today = useToday(); // 자정/포커스 시 갱신되어 "오늘" 라벨·톤을 최신으로 유지
   const [draft, setDraft] = useState('');
   const [subDrafts, setSubDrafts] = useState({});
   const [viewMode, setViewMode] = useState('date');
-  const [selectedDate, setSelectedDate] = useState(todayISO());
+  const [selectedDate, setSelectedDate] = useState(today);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [modalSubDraft, setModalSubDraft] = useState('');
@@ -103,7 +105,7 @@ export default function TodayTasks() {
 
   const dateLabel = () => {
     if (viewMode === 'all') return '전체';
-    if (selectedDate === todayISO()) return `오늘 - ${formatDate(todayISO())}`;
+    if (selectedDate === today) return `오늘 - ${formatDate(today)}`;
     if (selectedDate === tomorrowISO()) return `내일 - ${formatDate(tomorrowISO())}`;
     return formatDate(selectedDate);
   };
@@ -331,7 +333,7 @@ export default function TodayTasks() {
           selectedDate={selectedDate}
           tasks={tasks}
           onSelect={selectFromCalendar}
-          initialMonth={monthStartOf(viewMode === 'date' ? selectedDate : todayISO())}
+          initialMonth={monthStartOf(viewMode === 'date' ? selectedDate : today)}
         />
       )}
 
@@ -379,7 +381,7 @@ export default function TodayTasks() {
           selectedDate={selectedDate}
           tasks={tasks}
           onSelect={copySelectedTo}
-          initialMonth={monthStartOf(todayISO())}
+          initialMonth={monthStartOf(today)}
           header="복사할 날짜를 선택하세요"
         />
       )}
