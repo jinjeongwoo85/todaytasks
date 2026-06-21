@@ -10,7 +10,7 @@ import SubtaskList from './SubtaskList';
 import CalendarSheet from './CalendarSheet';
 import ClockTimePicker from './ClockTimePicker';
 
-export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onCancel, onSave, onChange, onDelete, onToggleSubtask, onUpdateSubtask, onRemoveSubtask, onAddSubtask }) {
+export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChange, onClose, onCancel, onSave, onChange, onDelete, onToggleSubtask, onUpdateSubtask, onRemoveSubtask, onAddSubtask, onReorderSubtask }) {
   const notesRef = useRef(null);
   const titleRef = useRef(null);
   const [pickerField, setPickerField] = useState(null);
@@ -93,6 +93,7 @@ export default function TaskDetailModal({ task, isNew, subDraft, onSubDraftChang
             draft={subDraft}
             onDraftChange={onSubDraftChange}
             onAdd={onAddSubtask}
+            onReorder={onReorderSubtask}
           />
         </div>
 

@@ -117,14 +117,19 @@ export default function App() {
     }
   };
 
-  const copySelectedTo = (targetIso) => {
-    const toCopy = tasks.filter((t) => selectedIds.has(t.id));
+  const copySelectedTo = async (targetIso) => {
+    const toCopy = tasks.filter((t) => selectedIds.has(t.id)); // 원본(position) 순서 보존
     if (toCopy.length === 0) return;
-    toCopy.forEach((t) => copyTask(t, targetIso));
-    setSelectedIds(new Set());
+    setSelectedIds(new Set()); // UI는 즉시 정리(목록/시트 닫기)
     setSelectedDate(targetIso);
     setViewMode('date');
     setCopyPickerOpen(false);
+    // 직렬화 + 직전 복사의 실제 id를 다음 previous로 체이닝 → 선택 순서대로 확정 삽입.
+    let prev; // 첫 항목은 undefined → 기존 마지막 뒤
+    for (const t of toCopy) {
+      const id = await copyTask(t, targetIso, prev);
+      if (id) prev = id; // 성공분만 체이닝(실패해도 마지막 성공 위치 유지)
+    }
   };
 
   const deleteSelected = () => {
@@ -377,6 +382,7 @@ export default function App() {
         onUpdateSubtask={editingTask ? (subId, text) => updateSubtask(editingTaskId, subId, text) : updateDraftSubtask}
         onRemoveSubtask={editingTask ? (subId) => removeSubtask(editingTaskId, subId) : removeDraftSubtask}
         onAddSubtask={editingTask ? () => { addSubtask(editingTaskId, modalSubDraft); setModalSubDraft(''); } : addDraftSubtask}
+        onReorderSubtask={editingTask ? (newIds, movedSubId) => reorderSubtask(editingTaskId, movedSubId, newIds) : undefined}
       />
     </div>
   );

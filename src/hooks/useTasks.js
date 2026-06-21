@@ -178,9 +178,11 @@ export function useTasks(accessToken) {
   // 부모 1개 + 하위할일들 생성 공통 코어 (addTask·copyTask 공유).
   // localParent = { text, dueDate, date, time, notes }, subTexts = 하위할일 텍스트 배열.
   // 낙관적 UI + IndexedDB 반영 + (온라인: API 생성·temp→실제 id 재조정 | 오프라인: pendingOps 큐잉).
-  const createTaskWithSubtasks = useCallback(async (localParent, subTexts) => {
-    if (!listId) return;
-    const previous = lastRealId(tasksRef.current); // 기존 마지막 할일 뒤(맨 끝)에 삽입
+  const createTaskWithSubtasks = useCallback(async (localParent, subTexts, opts = {}) => {
+    if (!listId) return null;
+    // previous 명시되면 그 뒤에, 아니면 기존 마지막 할일 뒤(맨 끝)에 삽입.
+    // 명시 전달(다중 복사 체이닝)은 tasksRef 갱신 타이밍에 의존하지 않게 해줌.
+    const previous = opts.previous !== undefined ? opts.previous : lastRealId(tasksRef.current);
     const oid = newId();
     const { text, dueDate = null, date = null, time = null, notes = '' } = localParent;
     setTasks((prev) => [...prev, { id: oid, text, done: false, dueDate, date, time, notes, expanded: false, subtasks: [], _listId: listId, _parentId: null }]);
@@ -195,7 +197,7 @@ export function useTasks(accessToken) {
         db.tasks.put({ id: subOid, _listId: listId, _parentId: oid, text: subText, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
         db.pendingOps.add({ type: 'addSubtask', payload: { tempId: subOid, taskId: oid, text: subText }, createdAt: Date.now() }).catch(() => {});
       }
-      return;
+      return oid; // 오프라인: 임시 부모 id 반환(체이닝 무해)
     }
     try {
       const g = await api.createTask(accessToken, listId, taskToGoogleBody({ text, dueDate, notes, date, time, done: false }), { previous });
@@ -218,9 +220,11 @@ export function useTasks(accessToken) {
           db.tasks.delete(subOid).catch(() => {});
         }
       }
+      return g.id; // 생성된 실제 부모 id 반환(다음 복사의 previous로 체이닝)
     } catch {
       setTasks((prev) => prev.filter((t) => t.id !== oid));
       db.tasks.delete(oid).catch(() => {});
+      return null;
     }
   }, [accessToken, listId]);
 
@@ -395,10 +399,11 @@ export function useTasks(accessToken) {
     }
   }, [accessToken, listId]);
 
-  const copyTask = useCallback(async (task, targetDueDate) => {
+  const copyTask = useCallback(async (task, targetDueDate, previous) => {
     // 복사: 종료일은 대상 날짜로, 시작일은 단일화(null), 시각은 유지, 완료상태는 리셋(false).
+    // previous를 명시하면 그 항목 뒤에 삽입 → 다중 복사 시 선택 순서 보존(체이닝).
     const subTexts = task.subtasks.map((s) => (s.text || '').trim()).filter(Boolean);
-    await createTaskWithSubtasks({ text: task.text, dueDate: targetDueDate, notes: task.notes || '', date: null, time: task.time ?? null }, subTexts);
+    return createTaskWithSubtasks({ text: task.text, dueDate: targetDueDate, notes: task.notes || '', date: null, time: task.time ?? null }, subTexts, { previous });
   }, [createTaskWithSubtasks]);
 
   return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
