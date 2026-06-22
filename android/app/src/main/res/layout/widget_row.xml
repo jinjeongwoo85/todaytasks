@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="0.5dp"
+    android:paddingBottom="0.5dp">
+
+    <ImageView
+        android:id="@+id/row_check"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:padding="3dp"
+        android:layout_marginEnd="9dp"
+        android:src="@drawable/ic_check_square_off"
+        android:contentDescription="완료 토글" />
+
+    <!-- 본문(제목 + 시각) — 탭하면 상세 열기 -->
+    <LinearLayout
+        android:id="@+id/row_body"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/row_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:textColor="#232323"
+            android:textSize="18sp" />
+
+        <TextView
+            android:id="@+id/row_meta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:textColor="#6B6862"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- 우측: 카운트 + 펼침 토글을 한 묶음으로 — 전체가 넓은 탭 영역(하위 있는 행만 노출) -->
+    <LinearLayout
+        android:id="@+id/row_expand"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone"
+        android:paddingStart="10dp"
+        android:paddingEnd="2dp">
+
+        <TextView
+            android:id="@+id/row_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#A8A29A"
+            android:textSize="14sp"
+            android:fontFamily="monospace" />
+
+        <ImageView
+            android:id="@+id/row_toggle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="4dp"
+            android:layout_marginStart="2dp"
+            android:src="@drawable/ic_chevron_right"
+            android:contentDescription="하위 할 일 펼치기" />
+    </LinearLayout>
+</LinearLayout>
