@@ -219,13 +219,25 @@ export default function App() {
     setDraft('');
   };
 
+  // 기존 할일 편집 모달 닫기 — 입력 중이던(=+ 안 누른) 하위할일 draft를 먼저 커밋(유실 방지) 후 닫음.
+  // 완료 버튼/바깥 탭/뒤로가기 공통 경로. (useBackButton보다 앞에 정의해 뒤로가기에서도 재사용)
+  const closeModal = () => {
+    if (editingTaskId && modalSubDraft.trim()) addSubtask(editingTaskId, modalSubDraft.trim());
+    setEditingTaskId(null);
+    setModalSubDraft('');
+  };
+
   // 새 할일 모달을 닫을 때 호출 — 제목이 있으면 저장(하위할일 포함), 없으면 그냥 버린다.
-  // '추가하기' 버튼뿐 아니라 바깥 탭/뒤로가기로 닫아도 동일하게 동작(기존 할일 편집의 자동저장과 통일).
+  // '추가하기' 버튼뿐 아니라 바깥 탭/뒤로가기로 닫아도 동일하게 동작. 입력 중이던 하위할일 draft도 함께 저장.
   const saveNewTask = () => {
     if (newTaskDraft?.text?.trim()) {
+      const pending = modalSubDraft.trim();
+      const subtasks = pending
+        ? [...newTaskDraft.subtasks, { id: newId(), text: pending, done: false }]
+        : newTaskDraft.subtasks;
       apiAddTask(newTaskDraft.text.trim(), newTaskDraft.dueDate, {
         notes: newTaskDraft.notes,
-        subtasks: newTaskDraft.subtasks,
+        subtasks,
         date: newTaskDraft.date,
         time: newTaskDraft.time,
       });
@@ -239,7 +251,7 @@ export default function App() {
 
   // 뒤로가기 닫기 우선순위(높은 순): 모달 → 새 할일(저장) → 검색 → 설정 → 복사 → 날짜선택 → 캘린더 → 선택모드
   useBackButton([
-    { open: editingTaskId !== null, close: () => { setEditingTaskId(null); setModalSubDraft(''); } },
+    { open: editingTaskId !== null, close: closeModal },
     { open: newTaskDraft !== null, close: () => saveNewTaskRef.current() },
     { open: searchOpen, close: () => setSearchOpen(false) },
     { open: settingsOpen, close: () => setSettingsOpen(false) },
@@ -265,8 +277,6 @@ export default function App() {
   const removeDraftSubtask = (subId) => {
     setNewTaskDraft((prev) => ({ ...prev, subtasks: prev.subtasks.filter((s) => s.id !== subId) }));
   };
-
-  const closeModal = () => { setEditingTaskId(null); setModalSubDraft(''); };
 
   // 할 일 행에 전달할 (터치가 아닌) 클릭/콜백 핸들러 묶음. 제스처는 컨테이너 hook이 전담.
   const rowHandlers = {
