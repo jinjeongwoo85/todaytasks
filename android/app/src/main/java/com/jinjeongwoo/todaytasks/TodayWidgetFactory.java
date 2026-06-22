@@ -84,15 +84,15 @@ public class TodayWidgetFactory implements android.widget.RemoteViewsService.Rem
         String id = t.optString("id");
         String listId = t.optString("listId");
         boolean done = t.optBoolean("done", false);
-        String time = t.isNull("time") ? null : t.optString("time", null);
+        String meta = t.isNull("meta") ? null : t.optString("meta", null); // 제목 옆 괄호 라벨((21:30)/(~6.25(목) 18:30))
 
         rv.setTextViewText(R.id.row_title, label(t.optString("title", ""), done));
         rv.setInt(R.id.row_check, "setImageResource", done ? R.drawable.ic_check_square_on : R.drawable.ic_check_square_off);
         rv.setInt(R.id.row_title, "setTextColor", done ? theme.mute : theme.ink);
 
-        if (time != null && time.length() > 0) {
-            rv.setTextViewText(R.id.row_meta, time);
-            rv.setInt(R.id.row_meta, "setTextColor", theme.sub);
+        if (meta != null && meta.length() > 0) {
+            rv.setTextViewText(R.id.row_meta, meta);
+            rv.setInt(R.id.row_meta, "setTextColor", theme.meta); // 강조색(세이지) — 회색 카운트와 구분
             rv.setViewVisibility(R.id.row_meta, View.VISIBLE);
         } else {
             rv.setViewVisibility(R.id.row_meta, View.GONE);

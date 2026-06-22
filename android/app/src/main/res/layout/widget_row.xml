@@ -4,8 +4,8 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingTop="0.5dp"
-    android:paddingBottom="0.5dp">
+    android:paddingTop="1dp"
+    android:paddingBottom="1dp">
 
     <ImageView
         android:id="@+id/row_check"
@@ -16,19 +16,21 @@
         android:src="@drawable/ic_check_square_off"
         android:contentDescription="완료 토글" />
 
-    <!-- 본문(제목 + 시각) — 탭하면 상세 열기 -->
+    <!-- 본문(제목 + 날짜/시간 라벨) — 탭하면 상세 열기. 라벨은 제목 오른쪽에 괄호로. -->
     <LinearLayout
         android:id="@+id/row_body"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:orientation="vertical">
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
         <TextView
             android:id="@+id/row_title"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:maxLines="2"
+            android:layout_weight="1"
+            android:maxLines="1"
             android:ellipsize="end"
             android:textColor="#232323"
             android:textSize="18sp" />
@@ -37,12 +39,13 @@
             android:id="@+id/row_meta"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
             android:visibility="gone"
             android:textColor="#6B6862"
             android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- 우측: 카운트 + 펼침 토글을 한 묶음으로 — 전체가 넓은 탭 영역(하위 있는 행만 노출) -->
+    <!-- 우측: 카운트 + 펼침 토글 (하위 있는 행만 노출) -->
     <LinearLayout
         android:id="@+id/row_expand"
         android:layout_width="wrap_content"
@@ -58,7 +61,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="#A8A29A"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:fontFamily="monospace" />
 
         <ImageView

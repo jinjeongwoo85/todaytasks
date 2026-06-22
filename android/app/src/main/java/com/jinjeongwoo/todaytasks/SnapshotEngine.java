@@ -114,7 +114,9 @@ public final class SnapshotEngine {
                     t.put("id", pid);
                     t.put("listId", listId);
                     t.put("title", p.optString("title", ""));
-                    t.put("time", time == null ? JSONObject.NULL : time);
+                    // 표기는 meta(렌더된 라벨)로 단일화 — raw time 필드는 위젯이 안 쓰므로 저장 안 함.
+                    String meta = widgetMeta(startDate, dueDate, time, today);
+                    t.put("meta", meta == null ? JSONObject.NULL : meta);
                     t.put("done", "completed".equals(p.optString("status", "")));
 
                     JSONArray subs = new JSONArray();
@@ -248,6 +250,30 @@ public final class SnapshotEngine {
         if (!mk.find()) return null;
         Matcher v = valueRe.matcher(mk.group());
         return v.find() ? v.group(1) : null;
+    }
+
+    // 위젯 행 우측 라벨(괄호). 위젯은 "오늘" 기준이라 단일 할일은 날짜 생략.
+    //  - 기간(시작<종료): 종료=오늘이면 (~HH:mm)/(~오늘), 미래면 (~M.d(요일) HH:mm)
+    //  - 단일: 시각 있으면 (HH:mm), 없으면 null(라벨 없음)
+    // ⚠️ 표기 규칙은 위젯 전용 — 앱 rowDateLabel(date.js)과 별개(교차 결합 주의).
+    private static String widgetMeta(String start, String due, String time, String today) {
+        boolean hasTime = time != null && time.length() > 0;
+        boolean isRange = start != null && due != null && start.compareTo(due) <= 0 && !start.equals(due);
+        if (isRange) {
+            if (due.equals(today)) return hasTime ? "(~" + time + ")" : "(~오늘)";
+            return "(~" + mdLabel(due) + (hasTime ? " " + time : "") + ")";
+        }
+        return hasTime ? "(" + time + ")" : null;
+    }
+
+    // 'YYYY-MM-DD' → 'M.d(요일)' (앱 formatDate와 동일 표기)
+    private static String mdLabel(String iso) {
+        try {
+            Date d = new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(iso);
+            return new SimpleDateFormat("M.d(E)", Locale.KOREA).format(d);
+        } catch (Exception e) {
+            return iso;
+        }
     }
 
     // date.js isTaskOnDate와 동일: 시작~종료 범위가 있으면 그 사이 모든 날, 없으면 (종료||시작)==오늘
