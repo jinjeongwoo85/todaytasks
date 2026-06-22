@@ -9,7 +9,7 @@ import { useToday } from './hooks/useToday';
 import { useBackButton } from './hooks/useBackButton';
 import { useWidgetBridge } from './hooks/useWidgetBridge';
 import { useSelection } from './hooks/useSelection';
-import { newId } from './utils/id';
+import { useNewTaskDraft } from './hooks/useNewTaskDraft';
 import Header from './components/Header';
 import TaskList from './components/TaskList';
 import CalendarSheet from './components/CalendarSheet';
@@ -27,8 +27,7 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
-  const [modalSubDraft, setModalSubDraft] = useState('');
-  const [newTaskDraft, setNewTaskDraft] = useState(null);
+  const [editSubDraft, setEditSubDraft] = useState(''); // 편집 모달에서 입력 중인 하위할일(+ 누르기 전)
   const [hideCompleted, setHideCompleted] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -39,6 +38,11 @@ export default function App() {
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
   const { tasks, loading, isOffline, refresh, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
   const { selectedIds, toggleSelect, clearSelection } = useSelection();
+  const {
+    newTaskDraft, setNewTaskDraft, newSubDraft, setNewSubDraft,
+    openNewTask, saveNewTask,
+    addDraftSubtask, toggleDraftSubtask, updateDraftSubtask, removeDraftSubtask,
+  } = useNewTaskDraft({ apiAddTask, draft, setDraft, viewMode, selectedDate });
 
   // 날짜 뷰로 오늘 보기(위젯 'today'/'add' 진입 공통).
   const goToday = () => { setViewMode('date'); setSelectedDate(today); };
@@ -154,45 +158,14 @@ export default function App() {
     setDraft('');
   };
 
-  const openNewTask = () => {
-    setNewTaskDraft({
-      id: '__new__',
-      text: draft.trim(),
-      notes: '',
-      dueDate: viewMode === 'date' ? selectedDate : null, // 기본 날짜 = 종료일
-      date: null,
-      time: null,
-      subtasks: [],
-    });
-    setDraft('');
-  };
-
   // 기존 할일 편집 모달 닫기 — 입력 중이던(=+ 안 누른) 하위할일 draft를 먼저 커밋(유실 방지) 후 닫음.
   // 완료 버튼/바깥 탭/뒤로가기 공통 경로. (useBackButton보다 앞에 정의해 뒤로가기에서도 재사용)
   const closeModal = () => {
-    if (editingTaskId && modalSubDraft.trim()) addSubtask(editingTaskId, modalSubDraft.trim());
+    if (editingTaskId && editSubDraft.trim()) addSubtask(editingTaskId, editSubDraft.trim());
     setEditingTaskId(null);
-    setModalSubDraft('');
+    setEditSubDraft('');
   };
 
-  // 새 할일 모달을 닫을 때 호출 — 제목이 있으면 저장(하위할일 포함), 없으면 그냥 버린다.
-  // '추가하기' 버튼뿐 아니라 바깥 탭/뒤로가기로 닫아도 동일하게 동작. 입력 중이던 하위할일 draft도 함께 저장.
-  const saveNewTask = () => {
-    if (newTaskDraft?.text?.trim()) {
-      const pending = modalSubDraft.trim();
-      const subtasks = pending
-        ? [...newTaskDraft.subtasks, { id: newId(), text: pending, done: false }]
-        : newTaskDraft.subtasks;
-      apiAddTask(newTaskDraft.text.trim(), newTaskDraft.dueDate, {
-        notes: newTaskDraft.notes,
-        subtasks,
-        date: newTaskDraft.date,
-        time: newTaskDraft.time,
-      });
-    }
-    setNewTaskDraft(null);
-    setModalSubDraft('');
-  };
   // popstate 핸들러는 마운트 시 1회 등록되므로 최신 saveNewTask를 ref로 노출(stale 방지).
   const saveNewTaskRef = useRef(saveNewTask);
   saveNewTaskRef.current = saveNewTask;
@@ -208,23 +181,6 @@ export default function App() {
     { open: calendarOpen, close: () => setCalendarOpen(false) },
     { open: selectedIds.size > 0, close: clearSelection },
   ]);
-
-  // 새 할일 모달의 하위할일은 서버 id가 아직 없으므로 draft에만 쌓아두고, 저장 시 함께 생성된다.
-  const addDraftSubtask = () => {
-    const text = modalSubDraft.trim();
-    if (!text) return;
-    setNewTaskDraft((prev) => ({ ...prev, subtasks: [...prev.subtasks, { id: newId(), text, done: false }] }));
-    setModalSubDraft('');
-  };
-  const toggleDraftSubtask = (subId) => {
-    setNewTaskDraft((prev) => ({ ...prev, subtasks: prev.subtasks.map((s) => s.id === subId ? { ...s, done: !s.done } : s) }));
-  };
-  const updateDraftSubtask = (subId, text) => {
-    setNewTaskDraft((prev) => ({ ...prev, subtasks: prev.subtasks.map((s) => s.id === subId ? { ...s, text } : s) }));
-  };
-  const removeDraftSubtask = (subId) => {
-    setNewTaskDraft((prev) => ({ ...prev, subtasks: prev.subtasks.filter((s) => s.id !== subId) }));
-  };
 
   // 할 일 행에 전달할 (터치가 아닌) 클릭/콜백 핸들러 묶음. 제스처는 컨테이너 hook이 전담.
   const rowHandlers = {
@@ -392,10 +348,10 @@ export default function App() {
       <TaskDetailModal
         task={editingTask ?? newTaskDraft}
         isNew={!!newTaskDraft && !editingTask}
-        subDraft={modalSubDraft}
-        onSubDraftChange={setModalSubDraft}
+        subDraft={editingTask ? editSubDraft : newSubDraft}
+        onSubDraftChange={editingTask ? setEditSubDraft : setNewSubDraft}
         onClose={editingTask ? closeModal : saveNewTask}
-        onCancel={() => { setNewTaskDraft(null); setModalSubDraft(''); }}
+        onCancel={() => { setNewTaskDraft(null); setNewSubDraft(''); }}
         onSave={editingTask ? closeModal : saveNewTask}
         onChange={editingTask
           ? (patch) => updateTask(editingTaskId, patch)
@@ -404,7 +360,7 @@ export default function App() {
         onToggleSubtask={editingTask ? (subId) => toggleSubtask(editingTaskId, subId) : toggleDraftSubtask}
         onUpdateSubtask={editingTask ? (subId, text) => updateSubtask(editingTaskId, subId, text) : updateDraftSubtask}
         onRemoveSubtask={editingTask ? (subId) => removeSubtask(editingTaskId, subId) : removeDraftSubtask}
-        onAddSubtask={editingTask ? () => { addSubtask(editingTaskId, modalSubDraft); setModalSubDraft(''); } : addDraftSubtask}
+        onAddSubtask={editingTask ? () => { addSubtask(editingTaskId, editSubDraft); setEditSubDraft(''); } : addDraftSubtask}
         onReorderSubtask={editingTask ? (newIds, movedSubId) => reorderSubtask(editingTaskId, movedSubId, newIds) : undefined}
       />
     </div>
