@@ -26,7 +26,9 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-      - run: npm ci
+      # npm install(>ci): 로컬(npm 11)과 CI(npm 10) lockfile 형식 차이로 npm ci가 깨지는 문제 회피.
+      # install은 설치 시 lock을 플랫폼/버전에 맞게 보정하므로 npm 버전과 무관하게 동작.
+      - run: npm install
       - run: npm run build
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
