@@ -6,6 +6,9 @@
 //  - popstate 시 최신 layers(ref)에서 첫 open 레이어의 close()만 호출(우선순위 보존).
 //  - popstate 리스너는 마운트 1회 등록, 최신 layers를 ref로 읽어 stale closure 방지.
 import { useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
+
+const IS_NATIVE = Capacitor.isNativePlatform();
 
 export function useBackButton(layers) {
   const layersRef = useRef(layers);
@@ -13,6 +16,23 @@ export function useBackButton(layers) {
   const pushedRef = useRef(false);
 
   const anyOpen = layers.some((l) => l.open);
+
+  // 네이티브(앱): 하드웨어 뒤로가기를 Capacitor가 가로채는데 기본이 "종료 안 함"이라,
+  // 직접 처리 — 열린 레이어가 있으면 가장 위만 닫고, 없으면 앱 종료(웹 PWA의 뒤로가기 동작과 일치).
+  // (웹은 아래 popstate 경로 그대로 — 브라우저가 알아서 종료/뒤로.)
+  useEffect(() => {
+    if (!IS_NATIVE) return;
+    let handle;
+    (async () => {
+      const { App } = await import('@capacitor/app');
+      handle = await App.addListener('backButton', () => {
+        const open = layersRef.current.filter((l) => l.open); // 우선순위 순
+        if (open.length > 0) open[0].close();
+        else App.exitApp();
+      });
+    })();
+    return () => { if (handle) handle.remove(); };
+  }, []);
 
   useEffect(() => {
     if (anyOpen && !pushedRef.current) {

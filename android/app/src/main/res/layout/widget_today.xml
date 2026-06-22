@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:paddingLeft="14dp"
+    android:paddingRight="14dp"
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp">
+
+    <LinearLayout
+        android:id="@+id/widget_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="3dp">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#232323"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:text="오늘" />
+
+        <ImageView
+            android:id="@+id/widget_add"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_add"
+            android:contentDescription="추가" />
+
+        <!-- 새로고침 진행 중 표시(평소 GONE, refreshing이면 VISIBLE) -->
+        <ProgressBar
+            android:id="@+id/widget_progress"
+            style="?android:attr/progressBarStyleSmall"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:padding="5dp"
+            android:layout_marginStart="2dp"
+            android:visibility="gone"
+            android:indeterminateTint="#5C7A5C" />
+
+        <ImageView
+            android:id="@+id/widget_refresh"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:padding="5dp"
+            android:layout_marginStart="2dp"
+            android:src="@drawable/ic_refresh"
+            android:contentDescription="새로고침" />
+
+        <ImageView
+            android:id="@+id/widget_theme"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:padding="5dp"
+            android:layout_marginStart="2dp"
+            android:src="@drawable/ic_theme"
+            android:contentDescription="테마 변경" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <TextView
+            android:id="@+id/widget_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textColor="#9AA0A6"
+            android:textSize="16sp"
+            android:text="오늘 할 일 없음" />
+
+        <ListView
+            android:id="@+id/widget_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="vertical"
+            android:scrollbarThumbVertical="@drawable/widget_scrollbar"
+            android:scrollbarSize="4dp"
+            android:fadeScrollbars="false" />
+    </FrameLayout>
+</LinearLayout>

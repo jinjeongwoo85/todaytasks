@@ -103,16 +103,19 @@ export function useTasks(accessToken) {
   useEffect(() => { listIdRef.current = listId; }, [listId]);
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
-  // 온라인 복귀 시: 큐 재생 → tasks 재로드
+  // 큐 재생 → tasks 재로드 (온라인 복귀 / 네이티브 앱 resume / 콜드 스타트 공용)
+  const syncPending = useCallback(async () => {
+    if (!navigator.onLine) return;
+    const token = accessTokenRef.current;
+    const lid = listIdRef.current;
+    if (!token || !lid) return;
+    await flushPendingOps(token, lid);
+    setRefreshCount((c) => c + 1);
+  }, []);
+
+  // 온라인/오프라인 이벤트
   useEffect(() => {
-    const onOnline = async () => {
-      setIsOffline(false);
-      const token = accessTokenRef.current;
-      const lid = listIdRef.current;
-      if (!token || !lid) return;
-      await flushPendingOps(token, lid);
-      setRefreshCount((c) => c + 1);
-    };
+    const onOnline = () => { setIsOffline(false); syncPending(); };
     const onOffline = () => setIsOffline(true);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
@@ -120,7 +123,31 @@ export function useTasks(accessToken) {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, []);
+  }, [syncPending]);
+
+  // 네이티브(Capacitor) 앱 복귀(resume) 시 동기화 — 모바일은 자주 죽고 재개되므로.
+  // 웹에선 isNativePlatform()=false → 리스너 미등록(기존 동작 유지).
+  useEffect(() => {
+    let remove;
+    (async () => {
+      const { Capacitor } = await import('@capacitor/core');
+      if (!Capacitor?.isNativePlatform?.()) return;
+      const { App } = await import('@capacitor/app');
+      const handle = await App.addListener('resume', () => { syncPending(); });
+      remove = () => handle.remove();
+    })();
+    return () => { if (remove) remove(); };
+  }, [syncPending]);
+
+  // 콜드 스타트: listId 확보 후(온라인이면) 1회 큐 재생.
+  // 앱을 새로 켰을 땐 'online' 이벤트가 안 오므로, 오프라인 중 쌓인 큐를 여기서 flush.
+  const coldStartDone = useRef(false);
+  useEffect(() => {
+    if (coldStartDone.current) return;
+    if (!accessToken || !listId) return;
+    coldStartDone.current = true;
+    syncPending();
+  }, [accessToken, listId, syncPending]);
 
   // tasks 로드 (accessToken 변경 또는 온라인 복귀 후 refreshCount 증가 시)
   useEffect(() => {
@@ -406,5 +433,5 @@ export function useTasks(accessToken) {
     return createTaskWithSubtasks({ text: task.text, dueDate: targetDueDate, notes: task.notes || '', date: null, time: task.time ?? null }, subTexts, { previous });
   }, [createTaskWithSubtasks]);
 
-  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
+  return { tasks, loading, isOffline, refresh: syncPending, addTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
 }

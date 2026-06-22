@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { TodaySnapshot } from './native/todaySnapshot';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useTasks } from './hooks/useTasks';
 import { useTaskListGestures } from './hooks/useTaskListGestures';
@@ -36,7 +38,66 @@ export default function App() {
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
-  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
+  const { tasks, loading, isOffline, refresh, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
+
+  // 데이터 동기화 + (네이티브) 위젯 스냅샷 갱신. 설정의 "지금 동기화" 버튼용.
+  const handleSync = async () => {
+    await refresh();
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const r = await TodaySnapshot.refreshTodaySnapshot();
+        console.log('[TodaySnapshot] count=', r?.count, r?.snapshot);
+      } catch (e) {
+        console.warn('[TodaySnapshot] failed', e);
+      }
+    }
+  };
+
+  // Phase 4 트리거① — 앱 내 변경 시 위젯 스냅샷 즉시(디바운스) 갱신.
+  // tasks가 단일 출처라, 추가/완료/수정/삭제/하위/순서 등 모든 변경이 여기로 모인다.
+  // 디바운스 1.5s: 연속 편집 폭주 방지 + 직전 API 변경이 서버에 반영될 여유. (네이티브에서만, 로그인 후.)
+  const snapshotTimer = useRef(null);
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !isSignedIn) return;
+    if (snapshotTimer.current) clearTimeout(snapshotTimer.current);
+    snapshotTimer.current = setTimeout(() => {
+      TodaySnapshot.refreshTodaySnapshot().catch(() => {});
+    }, 1500);
+    return () => { if (snapshotTimer.current) clearTimeout(snapshotTimer.current); };
+  }, [tasks, isSignedIn]);
+
+  // 위젯 → 앱 딥링크 소비: 네이티브가 Preferences에 적어둔 라우팅을 읽고 화면 전환 후 삭제.
+  // 콜드 스타트(mount) + 이미 떠 있을 때(resume) 모두 처리(브리지 준비 타이밍 무관).
+  const consumeWidgetRoute = useCallback(async () => {
+    if (!Capacitor.isNativePlatform()) return;
+    const { Preferences } = await import('@capacitor/preferences');
+    const { value } = await Preferences.get({ key: 'tt_widget_route' });
+    if (!value) return;
+    await Preferences.remove({ key: 'tt_widget_route' });
+    let r;
+    try { r = JSON.parse(value); } catch { return; }
+    if (!r?.route) return;
+    if (r.route === 'detail' && r.taskId) {
+      setEditingTaskId(r.taskId); // tasks 로드 후 모달이 열림
+    } else if (r.route === 'add') {
+      setViewMode('date'); setSelectedDate(today);
+      setNewTaskDraft({ id: '__new__', text: '', notes: '', dueDate: today, date: null, time: null, subtasks: [] });
+    } else { // 'today'
+      setViewMode('date'); setSelectedDate(today);
+    }
+  }, [today]);
+
+  useEffect(() => {
+    consumeWidgetRoute(); // mount
+    let remove;
+    (async () => {
+      if (!Capacitor.isNativePlatform()) return;
+      const { App } = await import('@capacitor/app');
+      const handle = await App.addListener('resume', () => { consumeWidgetRoute(); });
+      remove = () => handle.remove();
+    })();
+    return () => { if (remove) remove(); };
+  }, [consumeWidgetRoute]);
 
   // 뒤로가기/제스처 back → 가장 위 레이어만 닫기. 우선순위·동작은 아래 useBackButton(layers)로 위임
   // (saveNewTaskRef가 정의된 뒤에서 배선 — 파일 하단 참고).
@@ -220,7 +281,9 @@ export default function App() {
     onReorderSubtasks: (id, newIds, movedSubId) => reorderSubtask(id, movedSubId, newIds),
   };
 
-  if (isSilentTrying || loading) {
+  // 전체 로딩 화면은 "첫 로드"(할일이 아직 없을 때)에만. 이미 목록이 있는 새로고침(동기화 버튼·온라인 복귀)은
+  // 화면을 유지해 깜빡임 방지 — 진행 표시는 설정의 "동기화 중…" 스피너로 대체.
+  if (isSilentTrying || (loading && tasks.length === 0)) {
     return <div style={{ minHeight: '100vh', background: C.bg }} />;
   }
 
@@ -341,6 +404,8 @@ export default function App() {
         <SettingsSheet
           onClose={() => setSettingsOpen(false)}
           onOpenSearch={() => { setSettingsOpen(false); setSearchOpen(true); }}
+          onSync={handleSync}
+          syncing={loading}
           onSignOut={() => { signOut(); setSettingsOpen(false); }}
         />
       )}
