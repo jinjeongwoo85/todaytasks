@@ -105,7 +105,7 @@ export default function TaskRow({
             className="expand-panel"
             data-list-subtasks
             style={{
-              margin: '0 -6px', paddingLeft: '38px', paddingRight: '6px', paddingBottom: '12px',
+              margin: '0 -6px', paddingLeft: '28px', paddingRight: '6px', paddingBottom: '12px',
               boxSizing: 'border-box',
               background: selected ? C.selected : 'transparent',
               borderRadius: selected ? '0 0 8px 8px' : 0,
