@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react';
 import { Plus } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { TodaySnapshot } from './native/todaySnapshot';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useTasks } from './hooks/useTasks';
 import { useTaskListGestures } from './hooks/useTaskListGestures';
@@ -37,6 +39,19 @@ export default function App() {
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
   const { tasks, loading, isOffline, refresh, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
+
+  // 데이터 동기화 + (네이티브) 위젯 스냅샷 갱신. Phase 3 임시 트리거 — Phase 4에서 정식 트리거로 보강.
+  const handleSync = async () => {
+    await refresh();
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const r = await TodaySnapshot.refreshTodaySnapshot();
+        console.log('[TodaySnapshot] count=', r?.count, r?.snapshot);
+      } catch (e) {
+        console.warn('[TodaySnapshot] failed', e);
+      }
+    }
+  };
 
   // 뒤로가기/제스처 back → 가장 위 레이어만 닫기. 우선순위·동작은 아래 useBackButton(layers)로 위임
   // (saveNewTaskRef가 정의된 뒤에서 배선 — 파일 하단 참고).
@@ -220,7 +235,9 @@ export default function App() {
     onReorderSubtasks: (id, newIds, movedSubId) => reorderSubtask(id, movedSubId, newIds),
   };
 
-  if (isSilentTrying || loading) {
+  // 전체 로딩 화면은 "첫 로드"(할일이 아직 없을 때)에만. 이미 목록이 있는 새로고침(동기화 버튼·온라인 복귀)은
+  // 화면을 유지해 깜빡임 방지 — 진행 표시는 설정의 "동기화 중…" 스피너로 대체.
+  if (isSilentTrying || (loading && tasks.length === 0)) {
     return <div style={{ minHeight: '100vh', background: C.bg }} />;
   }
 
@@ -341,7 +358,7 @@ export default function App() {
         <SettingsSheet
           onClose={() => setSettingsOpen(false)}
           onOpenSearch={() => { setSettingsOpen(false); setSearchOpen(true); }}
-          onSync={refresh}
+          onSync={handleSync}
           syncing={loading}
           onSignOut={() => { signOut(); setSettingsOpen(false); }}
         />
