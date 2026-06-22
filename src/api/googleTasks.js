@@ -5,9 +5,16 @@ const h = (token) => ({
   'Content-Type': 'application/json',
 });
 
+// HTTP 오류를 던진다 — 조용히 삼키면 실패한 오프라인 op가 큐에서 지워져 영구 유실/desync된다(버그 2).
+// 던지면 flushPendingOps가 그 op를 큐에 남겨 다음 동기화에 재시도한다.
+async function jsonOrThrow(res) {
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 export async function fetchTaskLists(token) {
   const res = await fetch(`${BASE}/users/@me/lists`, { headers: h(token) });
-  const data = await res.json();
+  const data = await jsonOrThrow(res);
   return data.items || [];
 }
 
@@ -16,7 +23,7 @@ export async function fetchTasks(token, listId) {
     `${BASE}/lists/${listId}/tasks?showCompleted=true&showHidden=true&maxResults=100`,
     { headers: h(token) }
   );
-  const data = await res.json();
+  const data = await jsonOrThrow(res);
   return data.items || [];
 }
 
@@ -33,7 +40,7 @@ export async function createTask(token, listId, body, { parent, previous } = {})
     headers: h(token),
     body: JSON.stringify(body),
   });
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 // 할일을 형제 목록 내에서 이동(순서 변경). parent/previous는 쿼리 파라미터로 전달.
@@ -47,7 +54,7 @@ export async function moveTask(token, listId, taskId, { parent, previous } = {})
     method: 'POST',
     headers: h(token),
   });
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export async function patchTask(token, listId, taskId, body) {
@@ -56,12 +63,16 @@ export async function patchTask(token, listId, taskId, body) {
     headers: h(token),
     body: JSON.stringify(body),
   });
-  return res.json();
+  return jsonOrThrow(res);
 }
 
 export async function deleteTask(token, listId, taskId) {
-  await fetch(`${BASE}/lists/${listId}/tasks/${taskId}`, {
+  const res = await fetch(`${BASE}/lists/${listId}/tasks/${taskId}`, {
     method: 'DELETE',
     headers: h(token),
   });
+  // 이미 없는 항목(404/410)은 삭제 성공과 동일하게 취급(idempotent) — 큐가 막히지 않게.
+  if (!res.ok && res.status !== 404 && res.status !== 410) {
+    throw new Error(`HTTP ${res.status}`);
+  }
 }

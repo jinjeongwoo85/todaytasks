@@ -74,9 +74,10 @@ async function flushPendingOps(token, listId) {
       const { payload: p } = op;
 
       if (op.type === 'addTask') {
+        // 배치 내 연속 생성은 lastTaskId로 체이닝, 첫 항목은 큐에 기록된 previous(기존 마지막 형제)로 → 맨 끝 삽입.
         const g = await api.createTask(token, listId,
           taskToGoogleBody({ text: p.text, dueDate: p.dueDate, notes: p.notes || '', date: p.date, time: p.time, done: false }),
-          { previous: lastTaskId });
+          { previous: lastTaskId ?? resolve(p.previous) });
         lastTaskId = g.id;
         tempIdMap[p.tempId] = g.id;
         await db.tasks.delete(p.tempId);
@@ -84,7 +85,8 @@ async function flushPendingOps(token, listId) {
 
       } else if (op.type === 'addSubtask') {
         const parentId = resolve(p.taskId);
-        const g = await api.createTask(token, listId, taskToGoogleBody({ text: p.text, done: false }), { parent: parentId, previous: lastSubByParent[parentId] });
+        // 같은 부모 내 연속 생성은 lastSubByParent 체이닝, 첫 항목은 기록된 previous(기존 마지막 하위)로.
+        const g = await api.createTask(token, listId, taskToGoogleBody({ text: p.text, done: false }), { parent: parentId, previous: lastSubByParent[parentId] ?? resolve(p.previous) });
         lastSubByParent[parentId] = g.id;
         tempIdMap[p.tempId] = g.id;
         await db.tasks.delete(p.tempId);
@@ -117,12 +119,19 @@ export function useTasks(accessToken) {
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
   // 큐 재생 → tasks 재로드 (온라인 복귀 / 네이티브 앱 resume / 콜드 스타트 공용)
+  // 동시 실행 가드: online 이벤트와 resume가 동시에 부르면 같은 큐를 이중 처리(중복 생성/순서 깨짐)할 수 있어 막는다.
+  const flushingRef = useRef(false);
   const syncPending = useCallback(async () => {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || flushingRef.current) return;
     const token = accessTokenRef.current;
     const lid = listIdRef.current;
     if (!token || !lid) return;
-    await flushPendingOps(token, lid);
+    flushingRef.current = true;
+    try {
+      await flushPendingOps(token, lid);
+    } finally {
+      flushingRef.current = false;
+    }
     setRefreshCount((c) => c + 1);
   }, []);
 
@@ -244,7 +253,7 @@ export function useTasks(accessToken) {
     db.tasks.put({ id: oid, _listId: listId, _parentId: null, text, done: false, dueDate, date, time, notes }).catch(() => {});
 
     if (!navigator.onLine) {
-      db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text, dueDate, notes, date, time }, createdAt: Date.now() }).catch(() => {});
+      db.pendingOps.add({ type: 'addTask', payload: { tempId: oid, text, dueDate, notes, date, time, previous }, createdAt: Date.now() }).catch(() => {});
       // 오프라인: 임시 부모 id(oid) 밑으로 하위할일 큐잉 — 큐 재생 시 temp→실제 id 매핑됨.
       for (const subText of subTexts) {
         const subOid = newTempId();
@@ -350,7 +359,7 @@ export function useTasks(accessToken) {
     db.tasks.put({ id: oid, _listId: listId, _parentId: taskId, text: trimmed, done: false, dueDate: null, date: null, notes: '' }).catch(() => {});
 
     if (!navigator.onLine) {
-      db.pendingOps.add({ type: 'addSubtask', payload: { tempId: oid, taskId, text: trimmed }, createdAt: Date.now() }).catch(() => {});
+      db.pendingOps.add({ type: 'addSubtask', payload: { tempId: oid, taskId, text: trimmed, previous }, createdAt: Date.now() }).catch(() => {});
       return;
     }
     try {
