@@ -79,7 +79,16 @@ vite.config.js            # Vite + PWA 설정
 | 6 | UI 개선 | ✅ |
 | 7 | PWA 완성 + GitHub Pages 배포 | ✅ |
 
-**다음 작업 (남은 정리):** `useTasks.js`(~462줄)의 CRUD/optimistic-update 중복 로직 정리 리팩토링.
+**진행 중 (2026-06-22): Android 앱 + 홈 위젯 — `android` 브랜치에서만 작업.**
+기존 React/Vite PWA를 Capacitor로 Android 앱화하는 작업. **`main`(웹 배포)은 보호** — 안정화 전까진 머지 금지.
+- 마스터 계획서: `C:\Users\jinje\.claude\plans\pwa-synthetic-hennessy.md` (재개 가이드·빌드법 포함).
+- 진행: **Phase 0·1·2·3 완료**(앱화 / 네이티브 Google 로그인 / 위젯용 오늘-스냅샷). 다음 = Phase 4(갱신 트리거), Phase 5(Glance 위젯), Phase 6(서명·사이드로드).
+- 빌드: `npm run build:native` → `npx cap sync android` → `android/`에서 `gradlew.bat installDebug`
+  (env `JAVA_HOME`=Android Studio jbr, `ANDROID_HOME`=local SDK). `npx cap run`은 Windows에서 실패.
+- 분기: 네이티브 코드(`android/app/.../*.java`)는 앱 전용. 웹 동작은 `Capacitor.isNativePlatform()`로 분리(웹 무변경).
+- ⚠️ Phase 6 완료 후 **사용자에게 main 머지·배포 여부를 먼저 확인**할 것(자동 금지).
+
+**웹 쪽 남은 정리(보류):** `useTasks.js`의 CRUD/optimistic-update 중복 로직 정리 리팩토링.
 
 ## Key Architecture Decisions
 
