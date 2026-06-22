@@ -8,6 +8,7 @@ import { toISO, tomorrowISO, formatDate, isTaskOnDate, monthStartOf } from './ut
 import { useToday } from './hooks/useToday';
 import { useBackButton } from './hooks/useBackButton';
 import { useWidgetBridge } from './hooks/useWidgetBridge';
+import { useSelection } from './hooks/useSelection';
 import { newId } from './utils/id';
 import Header from './components/Header';
 import TaskList from './components/TaskList';
@@ -27,7 +28,6 @@ export default function App() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [modalSubDraft, setModalSubDraft] = useState('');
-  const [selectedIds, setSelectedIds] = useState(new Set());
   const [newTaskDraft, setNewTaskDraft] = useState(null);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -38,6 +38,7 @@ export default function App() {
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
   const { tasks, loading, isOffline, refresh, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
+  const { selectedIds, toggleSelect, clearSelection } = useSelection();
 
   // 날짜 뷰로 오늘 보기(위젯 'today'/'add' 진입 공통).
   const goToday = () => { setViewMode('date'); setSelectedDate(today); };
@@ -98,14 +99,6 @@ export default function App() {
     setCalendarOpen(false);
   };
 
-  const toggleSelect = (id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
   const shiftSelectedDate = (days) => {
     const d = new Date(selectedDate + 'T00:00:00');
     d.setDate(d.getDate() + days);
@@ -136,7 +129,7 @@ export default function App() {
   const copySelectedTo = async (targetIso) => {
     const toCopy = tasks.filter((t) => selectedIds.has(t.id)); // 원본(position) 순서 보존
     if (toCopy.length === 0) return;
-    setSelectedIds(new Set()); // UI는 즉시 정리(목록/시트 닫기)
+    clearSelection(); // UI는 즉시 정리(목록/시트 닫기)
     setSelectedDate(targetIso);
     setViewMode('date');
     setCopyPickerOpen(false);
@@ -150,7 +143,7 @@ export default function App() {
 
   const deleteSelected = () => {
     selectedIds.forEach((id) => removeTask(id));
-    setSelectedIds(new Set());
+    clearSelection();
   };
 
   const addTask = () => {
@@ -213,7 +206,7 @@ export default function App() {
     { open: copyPickerOpen, close: () => setCopyPickerOpen(false) },
     { open: !!datePickerTask, close: () => setDatePickerTask(null) },
     { open: calendarOpen, close: () => setCalendarOpen(false) },
-    { open: selectedIds.size > 0, close: () => setSelectedIds(new Set()) },
+    { open: selectedIds.size > 0, close: clearSelection },
   ]);
 
   // 새 할일 모달의 하위할일은 서버 id가 아직 없으므로 draft에만 쌓아두고, 저장 시 함께 생성된다.
@@ -291,7 +284,7 @@ export default function App() {
           selectedCount={selectedIds.size}
           onCopy={() => setCopyPickerOpen(true)}
           onDeleteSelected={deleteSelected}
-          onClearSelection={() => setSelectedIds(new Set())}
+          onClearSelection={clearSelection}
           hideCompleted={hideCompleted}
           onToggleHideCompleted={() => setHideCompleted((v) => !v)}
           allSubsExpanded={allSubsExpanded}
