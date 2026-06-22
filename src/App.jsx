@@ -36,7 +36,7 @@ export default function App() {
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
-  const { tasks, loading, isOffline, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
+  const { tasks, loading, isOffline, refresh, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
 
   // 뒤로가기/제스처 back → 가장 위 레이어만 닫기. 우선순위·동작은 아래 useBackButton(layers)로 위임
   // (saveNewTaskRef가 정의된 뒤에서 배선 — 파일 하단 참고).
@@ -341,6 +341,8 @@ export default function App() {
         <SettingsSheet
           onClose={() => setSettingsOpen(false)}
           onOpenSearch={() => { setSettingsOpen(false); setSearchOpen(true); }}
+          onSync={refresh}
+          syncing={loading}
           onSignOut={() => { signOut(); setSettingsOpen(false); }}
         />
       )}

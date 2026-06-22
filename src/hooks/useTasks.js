@@ -433,5 +433,5 @@ export function useTasks(accessToken) {
     return createTaskWithSubtasks({ text: task.text, dueDate: targetDueDate, notes: task.notes || '', date: null, time: task.time ?? null }, subTexts, { previous });
   }, [createTaskWithSubtasks]);
 
-  return { tasks, loading, isOffline, addTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
+  return { tasks, loading, isOffline, refresh: syncPending, addTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask };
 }
