@@ -40,11 +40,20 @@ describe('date utils', () => {
       expect(isTaskOnDate(t, '2026-06-20')).toBe(true);
       expect(isTaskOnDate(t, '2026-06-21')).toBe(false);
     });
+    it('날짜 미설정: 모든 날짜에 표시', () => {
+      const t = { date: null, dueDate: null };
+      expect(isTaskOnDate(t, '2026-06-20')).toBe(true);
+      expect(isTaskOnDate(t, '2026-06-22')).toBe(true);
+      expect(isTaskOnDate(t, '2026-07-01')).toBe(true);
+    });
   });
 
   describe('rowDateLabel', () => {
-    it('종료일 없으면 null', () => {
-      expect(rowDateLabel({ dueDate: null }, TODAY)).toBeNull();
+    it('날짜 미설정(종료·시작 둘 다 없음) → "—"', () => {
+      expect(rowDateLabel({ dueDate: null }, TODAY)).toBe('—');
+    });
+    it('시작일만 있고 종료일 없으면 null', () => {
+      expect(rowDateLabel({ date: '2026-06-20', dueDate: null }, TODAY)).toBeNull();
     });
     it('단일 + 종료=오늘 → "오늘"(+시각)', () => {
       expect(rowDateLabel({ dueDate: TODAY }, TODAY)).toBe('오늘');

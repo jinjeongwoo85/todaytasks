@@ -67,10 +67,12 @@ export const toneStyle = (iso, today = todayISO()) => TONE[dateTone(iso, today)]
 
 // 할일이 특정 날짜에 표시되는가. 시작~종료 범위가 있으면 그 사이 모든 날, 없으면 종료일 당일.
 // 종료일이 없고 시작일만 있는 예외 상태에선 시작일 당일에 표시(날짜 화면에서 사라지는 것 방지).
+// 날짜가 전혀 없으면(미설정) 모든 날짜에 표시 — 날짜 뷰/위젯에서 숨겨지지 않게.
 export const isTaskOnDate = (t, iso) => {
   if (t.date && t.dueDate && t.date <= t.dueDate) {
     return iso >= t.date && iso <= t.dueDate;
   }
+  if (!t.dueDate && !t.date) return true;
   return (t.dueDate || t.date) === iso;
 };
 
@@ -79,10 +81,11 @@ export const isTaskOnDate = (t, iso) => {
 //  - 기간(시작≠종료): '~종료일(요일)' (종료일=오늘이면 '~오늘').  예) ~6.19(목) / ~6.20(토) 18:00 / ~오늘 18:00
 //  - 단일 + 종료일=오늘: '오늘'.                                 예) 오늘 / 오늘 18:00
 //  - 단일 + 종료일≠오늘: '6.22(화)'.                            예) 6.22(화) / 6.22(화) 18:00
-//  - 종료일 없음: null
+//  - 날짜 미설정(종료·시작 둘 다 없음): '—'(em-dash) — 날짜 칸을 비워두지 않고 표시
+//  - 시작일만 있고 종료일 없는 예외 상태: null
 export const rowDateLabel = (t, today = todayISO()) => {
   const end = t.dueDate;
-  if (!end) return null;
+  if (!end) return t.date ? null : '—';
   const isRange = t.date && t.date !== end && t.date <= end;
   const time = t.time ? ` ${formatTime(t.time)}` : '';
   if (isRange) {

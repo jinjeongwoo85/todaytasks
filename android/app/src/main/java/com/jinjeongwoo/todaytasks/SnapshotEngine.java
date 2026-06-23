@@ -255,6 +255,7 @@ public final class SnapshotEngine {
     // 위젯 행 우측 라벨(괄호). 위젯은 "오늘" 기준이라 단일 할일은 날짜 생략.
     //  - 기간(시작<종료): 종료=오늘이면 (~HH:mm)/(~오늘), 미래면 (~M.d(요일) HH:mm)
     //  - 단일: 시각 있으면 (HH:mm), 없으면 null(라벨 없음)
+    //  - 날짜 미설정(시작·종료 둘 다 없음): "—"(em-dash) — 앱과 동일
     // ⚠️ 표기 규칙은 위젯 전용 — 앱 rowDateLabel(date.js)과 별개(교차 결합 주의).
     private static String widgetMeta(String start, String due, String time, String today) {
         boolean hasTime = time != null && time.length() > 0;
@@ -263,6 +264,7 @@ public final class SnapshotEngine {
             if (due.equals(today)) return hasTime ? "(~" + time + ")" : "(~오늘)";
             return "(~" + mdLabel(due) + (hasTime ? " " + time : "") + ")";
         }
+        if (due == null && start == null) return "—";
         return hasTime ? "(" + time + ")" : null;
     }
 
@@ -276,11 +278,13 @@ public final class SnapshotEngine {
         }
     }
 
-    // date.js isTaskOnDate와 동일: 시작~종료 범위가 있으면 그 사이 모든 날, 없으면 (종료||시작)==오늘
+    // date.js isTaskOnDate와 동일: 시작~종료 범위가 있으면 그 사이 모든 날, 없으면 (종료||시작)==오늘.
+    // 날짜가 전혀 없으면(미설정) 항상 표시(오늘 스냅샷에 포함).
     private static boolean isTaskOnDate(String date, String dueDate, String today) {
         if (date != null && dueDate != null && date.compareTo(dueDate) <= 0) {
             return today.compareTo(date) >= 0 && today.compareTo(dueDate) <= 0;
         }
+        if (dueDate == null && date == null) return true;
         String single = dueDate != null ? dueDate : date;
         return today.equals(single);
     }
