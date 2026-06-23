@@ -84,11 +84,11 @@ export default function TaskRow({
             <DateChip tone={tone} label={dateLabelText} onOpen={() => onOpenDateChip(t)} />
           )}
 
-          {t.subtasks.length > 0 && (
-            <span className="mono" style={{ fontSize: '11px', color: C.mute, flexShrink: 0, marginLeft: '8px' }}>
-              {subDone}/{t.subtasks.length}
-            </span>
-          )}
+          {/* 카운트 자리는 하위 유무와 무관하게 항상 같은 폭으로 예약 → 날짜칩 위치 고정.
+              하위 없으면 빈칸만 차지(우측 정렬로 토글에 붙음). */}
+          <span className="mono" style={{ fontSize: '11px', color: C.mute, flexShrink: 0, marginLeft: '8px', minWidth: '26px', textAlign: 'right' }}>
+            {t.subtasks.length > 0 ? `${subDone}/${t.subtasks.length}` : ''}
+          </span>
 
           <button
             onClick={() => onToggleExpand(t.id)}

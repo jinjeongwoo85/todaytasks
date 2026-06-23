@@ -97,12 +97,6 @@ public class TodayWidgetFactory implements android.widget.RemoteViewsService.Rem
             rv.setTextViewText(R.id.row_meta, meta);
             rv.setInt(R.id.row_meta, "setTextColor", theme.meta); // 강조색(세이지) — 회색 카운트와 구분
             rv.setViewVisibility(R.id.row_meta, View.VISIBLE);
-            // 하위가 없으면 우측 카운트/토글 그룹이 사라져 메타가 화면 끝까지 밀린다.
-            // 그 경우 카운트가 있던 자리쯤으로 메타를 살짝 왼쪽으로 당긴다(있으면 0 — 카운트 그룹과 붙지 않게).
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                rv.setViewLayoutMargin(R.id.row_meta, RemoteViews.MARGIN_END,
-                        total > 0 ? 0f : 36f, android.util.TypedValue.COMPLEX_UNIT_DIP);
-            }
         } else {
             rv.setViewVisibility(R.id.row_meta, View.GONE);
         }
@@ -119,7 +113,9 @@ public class TodayWidgetFactory implements android.widget.RemoteViewsService.Rem
             // 카운트+토글 묶음 전체가 펼침 탭 영역(넓은 타깃)
             rv.setOnClickFillInIntent(R.id.row_expand, fill(TodayWidgetProvider.WA_EXPAND, id, listId, null, false, "expand/" + id));
         } else {
-            rv.setViewVisibility(R.id.row_expand, View.GONE);
+            // 하위가 없어도 카운트+토글 묶음의 폭을 그대로 예약(INVISIBLE) → 메타(날짜/시각) 위치 고정.
+            rv.setTextViewText(R.id.row_count, "");
+            rv.setViewVisibility(R.id.row_expand, View.INVISIBLE);
         }
 
         rv.setOnClickFillInIntent(R.id.row_body, fill(TodayWidgetProvider.WA_OPEN, id, listId, null, false, "open/" + id));

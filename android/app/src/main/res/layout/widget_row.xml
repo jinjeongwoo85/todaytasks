@@ -60,6 +60,8 @@
             android:id="@+id/row_count"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:minWidth="26dp"
+            android:gravity="end"
             android:textColor="#A8A29A"
             android:textSize="12sp"
             android:fontFamily="monospace" />
