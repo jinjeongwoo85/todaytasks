@@ -255,7 +255,7 @@ public final class SnapshotEngine {
     // 위젯 행 우측 라벨(괄호). 위젯은 "오늘" 기준이라 단일 할일은 날짜 생략.
     //  - 기간(시작<종료): 종료=오늘이면 (~HH:mm)/(~오늘), 미래면 (~M.d(요일) HH:mm)
     //  - 단일: 시각 있으면 (HH:mm), 없으면 null(라벨 없음)
-    //  - 날짜 미설정(시작·종료 둘 다 없음): "—"(em-dash) — 앱과 동일
+    //  - 날짜 미설정(시작·종료 둘 다 없음): "—"(괄호 안 em-dash) — 다른 라벨과 동일하게 괄호 표기
     // ⚠️ 표기 규칙은 위젯 전용 — 앱 rowDateLabel(date.js)과 별개(교차 결합 주의).
     private static String widgetMeta(String start, String due, String time, String today) {
         boolean hasTime = time != null && time.length() > 0;
@@ -264,7 +264,7 @@ public final class SnapshotEngine {
             if (due.equals(today)) return hasTime ? "(~" + time + ")" : "(~오늘)";
             return "(~" + mdLabel(due) + (hasTime ? " " + time : "") + ")";
         }
-        if (due == null && start == null) return "—";
+        if (due == null && start == null) return "(—)";
         return hasTime ? "(" + time + ")" : null;
     }
 
