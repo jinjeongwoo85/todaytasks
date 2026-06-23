@@ -19,6 +19,10 @@ export default defineConfig({
     ...(isNative ? [] : [
       VitePWA({
         registerType: 'autoUpdate',
+        // 로컬 번들 폰트(woff2)도 오프라인 precache — 기본 glob엔 woff2가 빠져 있어 명시.
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        },
         manifest: {
           name: 'TodayTasks',
           short_name: 'Tasks',
