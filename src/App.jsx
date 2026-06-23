@@ -34,6 +34,7 @@ export default function App() {
   const [datePickerTask, setDatePickerTask] = useState(null);
   const [chipTimeOpen, setChipTimeOpen] = useState(false);
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
+  const [pickerMoveMode, setPickerMoveMode] = useState(false); // 날짜 picker가 복사용(false)인지 이동용(true)인지
 
   const { accessToken, isSignedIn, signIn, signOut, isReady, isSilentTrying } = useGoogleAuth();
   const { tasks, loading, isOffline, refresh, addTask: apiAddTask, updateTask, toggleTask, removeTask, toggleExpand, setExpandedFor, addSubtask, toggleSubtask, updateSubtask, removeSubtask, reorderTask, reorderSubtask, copyTask } = useTasks(accessToken);
@@ -145,6 +146,19 @@ export default function App() {
     }
   };
 
+  // 이동: 선택 항목들의 종료일을 대상 날짜로 변경(시작일은 단일화). 복사와 달리 원본을 옮긴다(id 유지).
+  const moveSelectedTo = async (targetIso) => {
+    const toMove = tasks.filter((t) => selectedIds.has(t.id));
+    if (toMove.length === 0) return;
+    clearSelection();
+    setSelectedDate(targetIso);
+    setViewMode('date');
+    setCopyPickerOpen(false);
+    for (const t of toMove) {
+      await updateTask(t.id, { dueDate: targetIso, date: null });
+    }
+  };
+
   const deleteSelected = () => {
     selectedIds.forEach((id) => removeTask(id));
     clearSelection();
@@ -237,10 +251,9 @@ export default function App() {
           dateLabel={dateLabel()}
           onOpenCalendar={openCalendar}
           selectionMode={selectedIds.size > 0}
-          selectedCount={selectedIds.size}
-          onCopy={() => setCopyPickerOpen(true)}
+          onCopy={() => { setPickerMoveMode(false); setCopyPickerOpen(true); }}
+          onMove={() => { setPickerMoveMode(true); setCopyPickerOpen(true); }}
           onDeleteSelected={deleteSelected}
-          onClearSelection={clearSelection}
           hideCompleted={hideCompleted}
           onToggleHideCompleted={() => setHideCompleted((v) => !v)}
           allSubsExpanded={allSubsExpanded}
@@ -339,9 +352,9 @@ export default function App() {
           onClose={() => setCopyPickerOpen(false)}
           selectedDate={selectedDate}
           tasks={tasks}
-          onSelect={copySelectedTo}
+          onSelect={pickerMoveMode ? moveSelectedTo : copySelectedTo}
           initialMonth={monthStartOf(today)}
-          header="복사할 날짜를 선택하세요"
+          header={pickerMoveMode ? '이동할 날짜를 선택하세요' : '복사할 날짜를 선택하세요'}
         />
       )}
 

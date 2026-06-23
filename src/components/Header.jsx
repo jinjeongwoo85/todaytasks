@@ -20,7 +20,7 @@ function CheckSlash({ size = 14, bg }) {
 
 export default function Header({
   isOffline, dateLabel, onOpenCalendar,
-  selectionMode, selectedCount, onCopy, onDeleteSelected, onClearSelection,
+  selectionMode, onCopy, onMove, onDeleteSelected,
   hideCompleted, onToggleHideCompleted, allSubsExpanded, hasExpandable, onToggleAllSubtasks,
   viewMode, onToggleViewMode, onOpenSettings,
   completed, total, pct,
@@ -42,7 +42,6 @@ export default function Header({
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
           {selectionMode ? (
             <>
-              <span className="mono" style={{ fontSize: '11px', color: C.sage, whiteSpace: 'nowrap' }}>{selectedCount}개 선택</span>
               <button
                 onClick={onCopy}
                 className="mono"
@@ -51,18 +50,18 @@ export default function Header({
                 복사
               </button>
               <button
+                onClick={onMove}
+                className="mono"
+                style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '10px', background: 'transparent', color: C.label, border: `1px solid ${C.border}`, cursor: 'pointer' }}
+              >
+                이동
+              </button>
+              <button
                 onClick={onDeleteSelected}
                 className="mono"
                 style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '10px', background: 'transparent', color: C.danger, border: `1px solid ${C.overdueBg}`, cursor: 'pointer' }}
               >
                 삭제
-              </button>
-              <button
-                onClick={onClearSelection}
-                className="mono"
-                style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '10px', background: 'transparent', color: C.label, border: `1px solid ${C.border}`, cursor: 'pointer' }}
-              >
-                취소
               </button>
             </>
           ) : (
