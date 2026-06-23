@@ -114,6 +114,10 @@ export function useTasks(accessToken) {
   const accessTokenRef = useRef(accessToken);
   const listIdRef = useRef(listId);
   const tasksRef = useRef(tasks);
+  // 생성 중(temp id)인 부모의 실제 id를 가리키는 Promise 맵 { [tempId]: Promise<realId|null> }.
+  // 갓 만든 할일에 곧바로 하위할일을 추가할 때(부모 생성 미완료) addSubtask가 이를 await해
+  // 임시 부모 id가 Google `parent`로 새어나가 하위가 최상위로 생성되는 race를 막는다.
+  const inflightParentRef = useRef({});
   useEffect(() => { accessTokenRef.current = accessToken; }, [accessToken]);
   useEffect(() => { listIdRef.current = listId; }, [listId]);
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
@@ -263,10 +267,16 @@ export function useTasks(accessToken) {
       }
       return oid; // 오프라인: 임시 부모 id 반환(체이닝 무해)
     }
+    // 부모 생성 구간을 Promise로 노출 → 생성 중(temp id)인 부모에 곧바로 하위할일을 달면
+    // addSubtask가 이를 await해 실제 부모 id를 사용. 키는 지우지 않고 resolve된 채 남겨
+    // (id 스왑~리렌더 사이 짧은 틈에 들어오는 늦은 addSubtask도 즉시 실제 id를 얻게) 둔다.
+    let resolveParent;
+    inflightParentRef.current[oid] = new Promise((r) => { resolveParent = r; });
     try {
       const g = await api.createTask(accessToken, listId, taskToGoogleBody({ text, dueDate, notes, date, time, done: false }), { previous });
       setTasks((prev) => prev.map((t) => t.id === oid ? { ...t, id: g.id } : t));
       db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: null, text, done: false, dueDate, date, time, notes })).catch(() => {});
+      resolveParent(g.id);
 
       // 부모 생성 후 각 하위할일을 부모 밑에 순서대로 생성(직전 하위 뒤에 체이닝 → 입력 순서 유지).
       let prevSub;
@@ -288,6 +298,7 @@ export function useTasks(accessToken) {
     } catch {
       setTasks((prev) => prev.filter((t) => t.id !== oid));
       db.tasks.delete(oid).catch(() => {});
+      resolveParent(null); // 부모 생성 실패 → 대기 중인 addSubtask가 고아 만들지 않게 null 통지
       return null;
     }
   }, [accessToken, listId]);
@@ -362,12 +373,26 @@ export function useTasks(accessToken) {
       db.pendingOps.add({ type: 'addSubtask', payload: { tempId: oid, taskId, text: trimmed, previous }, createdAt: Date.now() }).catch(() => {});
       return;
     }
+
+    // 갓 만든 부모(temp id)면 부모 생성이 끝나 실제 id가 될 때까지 기다린다 → 임시 id가 Google
+    // `parent`로 새어나가 하위가 최상위로 생성되는 race 차단. 추적 불가/부모 생성 실패면 낙관적 하위 철회.
+    let parentId = taskId;
+    if (isTempId(parentId)) {
+      const real = await (inflightParentRef.current[parentId] ?? Promise.resolve(null));
+      if (!real) {
+        setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== oid) } : t));
+        db.tasks.delete(oid).catch(() => {});
+        return;
+      }
+      parentId = real; // 이후 재조정은 실제 부모 id 기준(낙관적 하위는 id 스왑 때 부모 따라 이동됨)
+    }
+
     try {
-      const g = await api.createTask(accessToken, listId, taskToGoogleBody({ text: trimmed, done: false }), { parent: taskId, previous });
-      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, subtasks: t.subtasks.map((s) => s.id === oid ? { ...s, id: g.id } : s) } : t));
-      db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: taskId, text: trimmed, done: false, dueDate: null, date: null, notes: '' })).catch(() => {});
+      const g = await api.createTask(accessToken, listId, taskToGoogleBody({ text: trimmed, done: false }), { parent: parentId, previous });
+      setTasks((prev) => prev.map((t) => t.id === parentId ? { ...t, subtasks: t.subtasks.map((s) => s.id === oid ? { ...s, id: g.id } : s) } : t));
+      db.tasks.delete(oid).then(() => db.tasks.put({ id: g.id, _listId: listId, _parentId: parentId, text: trimmed, done: false, dueDate: null, date: null, notes: '' })).catch(() => {});
     } catch {
-      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== oid) } : t));
+      setTasks((prev) => prev.map((t) => t.id === parentId ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== oid) } : t));
       db.tasks.delete(oid).catch(() => {});
     }
   }, [accessToken, listId]);
