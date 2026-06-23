@@ -209,13 +209,14 @@ export default function App() {
     onReorderSubtasks: (id, newIds, movedSubId) => reorderSubtask(id, movedSubId, newIds),
   };
 
-  // 전체 로딩 화면은 "첫 로드"(할일이 아직 없을 때)에만. 이미 목록이 있는 새로고침(동기화 버튼·온라인 복귀)은
-  // 화면을 유지해 깜빡임 방지 — 진행 표시는 설정의 "동기화 중…" 스피너로 대체.
-  if (isSilentTrying || (loading && tasks.length === 0)) {
+  // 빈 화면은 "보여줄 게 정말 아무것도 없을 때"만(첫 로드·캐시 없음). 캐시(또는 실데이터)가 있으면
+  // 인증/로딩 중에도 그 목록을 먼저 보여줘 콜드스타트·재인증 깜빡임을 없앤다.
+  if (tasks.length === 0 && (isSilentTrying || loading)) {
     return <div style={{ minHeight: '100vh', background: C.bg }} />;
   }
 
-  if (!isSignedIn) {
+  // 로그인 화면은 인증 시도가 끝났고(재인증 중 아님) 미로그인일 때만. (재인증 중엔 위에서 캐시를 렌더)
+  if (!isSignedIn && !isSilentTrying) {
     return <LoginScreen onSignIn={signIn} isReady={isReady} />;
   }
 
@@ -225,7 +226,6 @@ export default function App() {
       style={{ background: C.bg, minHeight: '100vh', display: 'flex', justifyContent: 'center', touchAction: 'pan-y' }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
         .mono { font-family: 'IBM Plex Mono', monospace; }
         .sans { font-family: 'Inter', system-ui, sans-serif; }
         .task-row { transition: opacity 0.2s ease, background 0.15s ease; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

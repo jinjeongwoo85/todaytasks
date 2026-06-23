@@ -122,6 +122,20 @@ export function useTasks(accessToken) {
   useEffect(() => { listIdRef.current = listId; }, [listId]);
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
+  // 콜드 스타트 가속(stale-while-revalidate): 네트워크 응답을 기다리지 않고 IndexedDB 캐시를
+  // 즉시 그려 첫 화면을 빠르게 띄운다(캐시는 토큰 불필요). 이후 아래 네트워크 load가 최신으로 교체.
+  // 가드: 이미 네트워크 결과가 들어왔으면(목록 있음) 덮어쓰지 않음.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cached = await loadTasksFromDb();
+      if (cancelled || !cached.listId) return;
+      setListId((cur) => cur ?? cached.listId);
+      setTasks((cur) => (cur.length === 0 ? cached.tasks : cur));
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // 큐 재생 → tasks 재로드 (온라인 복귀 / 네이티브 앱 resume / 콜드 스타트 공용)
   // 동시 실행 가드: online 이벤트와 resume가 동시에 부르면 같은 큐를 이중 처리(중복 생성/순서 깨짐)할 수 있어 막는다.
   const flushingRef = useRef(false);
@@ -176,8 +190,14 @@ export function useTasks(accessToken) {
   }, [accessToken, listId, syncPending]);
 
   // tasks 로드 (accessToken 변경 또는 온라인 복귀 후 refreshCount 증가 시)
+  const hadTokenRef = useRef(false); // 토큰을 가진 적 있는지 — "재인증 중 토큰 없음"과 "로그아웃" 구분
   useEffect(() => {
-    if (!accessToken) { setTasks([]); setListId(null); return; }
+    if (!accessToken) {
+      // 콜드 스타트/재인증 중(아직 토큰 없음)엔 hydrate한 캐시를 유지하고, 명시적 로그아웃(토큰 보유→해제)에만 비운다.
+      if (hadTokenRef.current) { setTasks([]); setListId(null); }
+      return;
+    }
+    hadTokenRef.current = true;
     let cancelled = false;
 
     async function load() {
