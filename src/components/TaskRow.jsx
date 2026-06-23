@@ -45,7 +45,9 @@ export default function TaskRow({
           className="task-row"
           style={{
             display: 'flex', alignItems: 'center', padding: '12px 6px',
-            margin: '0 -6px', borderRadius: '8px',
+            margin: '0 -6px',
+            // 펼쳐져 아래 패널과 이어질 땐 아래 모서리를 직각으로(세로바가 연속된 '대괄호'처럼 보이게)
+            borderRadius: selected && t.expanded ? '8px 8px 0 0' : '8px',
             opacity: t.done ? 0.5 : 1,
             background: selected ? C.selected : 'transparent',
             borderLeft: selected ? `3px solid ${C.sage}` : '3px solid transparent',
@@ -62,7 +64,7 @@ export default function TaskRow({
           <div
             onClick={() => onTextClick(t.id)}
             style={{
-              flex: 1, display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
+              flex: 1, display: 'flex', alignItems: 'center', minWidth: 0,
               paddingRight: '10px', boxSizing: 'border-box', cursor: 'pointer', userSelect: 'none',
             }}
           >
@@ -76,16 +78,16 @@ export default function TaskRow({
             >
               {t.text || '(제목 없음)'}
             </span>
-
-            {t.subtasks.length > 0 && (
-              <span className="mono" style={{ fontSize: '11px', color: C.mute, flexShrink: 0 }}>
-                {subDone}/{t.subtasks.length}
-              </span>
-            )}
           </div>
 
           {dateLabelText && (
             <DateChip tone={tone} label={dateLabelText} onOpen={() => onOpenDateChip(t)} />
+          )}
+
+          {t.subtasks.length > 0 && (
+            <span className="mono" style={{ fontSize: '11px', color: C.mute, flexShrink: 0, marginLeft: '8px' }}>
+              {subDone}/{t.subtasks.length}
+            </span>
           )}
 
           <button
@@ -105,9 +107,11 @@ export default function TaskRow({
             className="expand-panel"
             data-list-subtasks
             style={{
-              margin: '0 -6px', paddingLeft: '28px', paddingRight: '6px', paddingBottom: '12px',
+              // paddingLeft 25px + borderLeft 3px = 헤더와 동일한 28px 들여쓰기(border-box 보정)
+              margin: '0 -6px', paddingLeft: '25px', paddingRight: '6px', paddingBottom: '12px',
               boxSizing: 'border-box',
               background: selected ? C.selected : 'transparent',
+              borderLeft: selected ? `3px solid ${C.sage}` : '3px solid transparent',
               borderRadius: selected ? '0 0 8px 8px' : 0,
             }}
           >

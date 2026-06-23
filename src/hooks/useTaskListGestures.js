@@ -166,8 +166,10 @@ export function useTaskListGestures(opts) {
       const id = pressedIdRef.current;
       const idx = optsRef.current.visibleTasks.findIndex((t) => t.id === id);
       const node = findRow(id);
-      const headerEl = node ? node.querySelector('.task-row') : null;
-      const height = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 56;
+      // 카드 전체(헤더+펼친 하위 패널) 높이로 측정 → 펼친 할일을 끌면 다른 행이 그 높이만큼 밀려 가림 없음.
+      // node(data-task-id)의 첫 자식 = shift 래퍼(헤더+펼침 패널, divider 제외).
+      const innerEl = node ? node.firstElementChild : null;
+      const height = innerEl ? Math.round(innerEl.getBoundingClientRect().height) : 56;
       scrollAccumRef.current = 0;
       lastPointYRef.current = point.clientY;
       setDragInfo({ id, startY: point.clientY, currentY: point.clientY, originalIndex: idx, height, offsetY: 0 });
