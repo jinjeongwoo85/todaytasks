@@ -316,6 +316,7 @@ export default function App() {
           initialMonth={monthStartOf(datePickerTask.iso)}
           time={datePickerTask.time}
           onOpenTime={() => setChipTimeOpen(true)}
+          onAllDay={() => { updateTask(datePickerTask.id, { time: null }); setDatePickerTask((p) => p && { ...p, time: null }); }}
         />
       )}
 

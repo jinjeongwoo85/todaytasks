@@ -22,6 +22,7 @@ export default function CalendarSheet({
   backdrop,
   time,          // 할일 날짜 칩 편집 시에만 사용: 현재 시각('HH:mm'|null)
   onOpenTime,    // 있으면 시각(시계) 컨트롤을 위에 노출
+  onAllDay,      // 종일(시각 없음)로 설정 — 시각을 지운다(time=null)
 }) {
   const [month, setMonth] = useState(initialMonth);
   return (
@@ -32,17 +33,33 @@ export default function CalendarSheet({
         </div>
       )}
       {onOpenTime && (
-        <div
-          onClick={onOpenTime}
-          className="mono"
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer',
-            fontSize: '13px', padding: '9px', marginBottom: '12px', borderRadius: '10px',
-            background: C.raised, color: time ? C.ink : C.label, border: `1px solid ${C.border}`,
-          }}
-        >
-          <Clock size={14} />
-          <span>{time || '시각 설정'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <div
+            onClick={onOpenTime}
+            className="mono"
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer',
+              fontSize: '13px', padding: '9px', borderRadius: '10px',
+              background: C.raised, color: time ? C.ink : C.label,
+              border: `1px solid ${time ? C.sage : C.border}`,
+            }}
+          >
+            <Clock size={14} />
+            <span>{time || '시각 설정'}</span>
+          </div>
+          {/* 종일 = 시각 없음(time===null). 시각을 정하면 자동 해제, 종일을 누르면 시각이 지워짐 → 상호배타. */}
+          <button
+            onClick={() => onAllDay && onAllDay()}
+            className="mono"
+            style={{
+              padding: '9px 14px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', whiteSpace: 'nowrap',
+              border: `1px solid ${!time ? C.sage : C.border}`,
+              background: !time ? C.sage : 'transparent',
+              color: !time ? C.inkInv : C.label,
+            }}
+          >
+            종일
+          </button>
         </div>
       )}
       <MonthCalendar
