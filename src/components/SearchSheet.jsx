@@ -6,7 +6,7 @@ import { Search, X } from 'lucide-react';
 import { C } from '../styles/tokens';
 import BottomSheet from './BottomSheet';
 import ProgressBar from './ProgressBar';
-import Checkbox from './Checkbox';
+import CheckboxButton from './CheckboxButton';
 import { rowDateLabel, formatDateY } from '../utils/date';
 
 // 기간 매치용 — 할일의 [시작..종료] 구간(없으면 종료/시작 단일). 날짜 없으면 null.
@@ -147,7 +147,7 @@ export default function SearchSheet({ tasks, onPick, onToggleTask, onToggleSubta
           <Section title="할일" done={taskDone} total={taskResults.length}>
             {taskResults.map((t) => (
               <ResultRow key={t.id} done={t.done} onPick={() => onPick(t.id)}
-                check={<SquareCheck done={t.done} onToggle={() => onToggleTask(t.id)} />}
+                check={<CheckboxButton done={t.done} onToggle={() => onToggleTask(t.id)} stop size={20} radius="3px" checkSize={13} />}
                 label={t.text || '(제목 없음)'} labelSize="15px" date={rowDateLabel(t)} />
             ))}
           </Section>
@@ -157,7 +157,7 @@ export default function SearchSheet({ tasks, onPick, onToggleTask, onToggleSubta
           <Section title="하위할일" done={subDone} total={subResults.length}>
             {subResults.map(({ parent, sub }) => (
               <ResultRow key={sub.id} done={sub.done} onPick={() => onPick(parent.id)}
-                check={<CircleCheck done={sub.done} onToggle={() => onToggleSubtask(parent.id, sub.id)} />}
+                check={<CheckboxButton done={sub.done} onToggle={() => onToggleSubtask(parent.id, sub.id)} stop size={17} checkSize={11} />}
                 label={sub.text} labelSize="14px" date={rowDateLabel(parent)} />
             ))}
           </Section>
@@ -229,23 +229,5 @@ function ResultRow({ done, onPick, check, label, labelSize, date }) {
       <span style={{ flex: 1, fontSize: labelSize, color: C.ink, textDecoration: done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       {date && <span className="mono" style={{ fontSize: '11px', color: C.sub, flexShrink: 0 }}>{date}</span>}
     </div>
-  );
-}
-
-function SquareCheck({ done, onToggle }) {
-  return (
-    <button onClick={(e) => { e.stopPropagation(); onToggle(); }} aria-label={done ? '완료 취소' : '완료로 표시'}
-      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
-      <Checkbox done={done} size={20} radius="3px" checkSize={13} />
-    </button>
-  );
-}
-
-function CircleCheck({ done, onToggle }) {
-  return (
-    <button onClick={(e) => { e.stopPropagation(); onToggle(); }} aria-label={done ? '완료 취소' : '완료로 표시'}
-      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
-      <Checkbox done={done} size={17} checkSize={11} />
-    </button>
   );
 }

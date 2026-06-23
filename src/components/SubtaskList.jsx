@@ -7,7 +7,7 @@ import { X } from 'lucide-react';
 import { C } from '../styles/tokens';
 import { useReorderDragVertical } from '../hooks/useReorderDragVertical';
 import SubtaskAddRow from './SubtaskAddRow';
-import Checkbox from './Checkbox';
+import CheckboxButton from './CheckboxButton';
 
 export default function SubtaskList({ subtasks, onToggle, onRemove, onUpdate, draft, onDraftChange, onAdd, compact, onReorder }) {
   const drag = useReorderDragVertical(subtasks, onReorder);
@@ -68,13 +68,7 @@ export default function SubtaskList({ subtasks, onToggle, onRemove, onUpdate, dr
                     WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none',
                   }}
                 >
-                  <button
-                    onClick={() => onToggle(s.id)}
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexShrink: 0 }}
-                    aria-label={s.done ? '완료 취소' : '완료로 표시'}
-                  >
-                    <Checkbox done={s.done} size={18} checkSize={11} />
-                  </button>
+                  <CheckboxButton done={s.done} onToggle={() => onToggle(s.id)} size={18} checkSize={11} />
 
                   {editing ? (
                     <input
