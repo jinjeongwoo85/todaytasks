@@ -90,16 +90,23 @@ public class TodayWidgetFactory implements android.widget.RemoteViewsService.Rem
         rv.setInt(R.id.row_check, "setImageResource", done ? R.drawable.ic_check_square_on : R.drawable.ic_check_square_off);
         rv.setInt(R.id.row_title, "setTextColor", done ? theme.mute : theme.ink);
 
+        JSONArray subs = t.optJSONArray("subtasks");
+        int total = subs == null ? 0 : subs.length();
+
         if (meta != null && meta.length() > 0) {
             rv.setTextViewText(R.id.row_meta, meta);
             rv.setInt(R.id.row_meta, "setTextColor", theme.meta); // 강조색(세이지) — 회색 카운트와 구분
             rv.setViewVisibility(R.id.row_meta, View.VISIBLE);
+            // 하위가 없으면 우측 카운트/토글 그룹이 사라져 메타가 화면 끝까지 밀린다.
+            // 그 경우 카운트가 있던 자리쯤으로 메타를 살짝 왼쪽으로 당긴다(있으면 0 — 카운트 그룹과 붙지 않게).
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                rv.setViewLayoutMargin(R.id.row_meta, RemoteViews.MARGIN_END,
+                        total > 0 ? 0f : 36f, android.util.TypedValue.COMPLEX_UNIT_DIP);
+            }
         } else {
             rv.setViewVisibility(R.id.row_meta, View.GONE);
         }
 
-        JSONArray subs = t.optJSONArray("subtasks");
-        int total = subs == null ? 0 : subs.length();
         if (total > 0) {
             int doneCount = 0;
             for (int i = 0; i < total; i++) if (subs.optJSONObject(i).optBoolean("done", false)) doneCount++;
